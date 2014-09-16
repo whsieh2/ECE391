@@ -20,6 +20,9 @@
     # Character to draw for an explosion - '@'
 
 	EXPLOSION = 64
+	SPACE = 32
+	SHIFT_SIZE = 16
+	
 
 
 # Data shared between this file and rtc.c helper functions
@@ -69,21 +72,25 @@ mp1_poke:
 # Registers: Standard C calling convention
 
 .globl mp1_rtc_tasklet
-mp1_rtc_tasklet:
+
+#In my tasklet, I call three different functions (callee-save), update_missiles, update_bases, and update_crosshairs 
+mp1_rtc_tasklet:	
 	pushl %ebp				#push base pointer
 	movl %esp, %ebp 		#set stack pointer to the base pointer
 	
+	pushl %ebx
 	pushl %eax				#save callee registers
 	pushl %ecx				#save callee registers	
 	pushl %edx				#save register	
 	pushl %esi
 	pushl %edi
 	call update_missiles	#Calls update_missiles
-	popl %edi
+	popl %edi			
 	popl %esi
 	popl %edx
 	popl %ecx
 	popl %eax
+	popl %ebx
 
 	pushl %eax				#save callee registers
 	pushl %ebx				#save callee registers
@@ -107,7 +114,7 @@ mp1_rtc_tasklet:
 	pushl %esi
 	pushl %edi			#save register
 	call update_crosshairs	#calls update_crosshairs
-	popl %edi
+	popl %edi 
 	popl %esi
 	popl %edx
 	popl %ecx
@@ -140,16 +147,17 @@ mp1_ioctl:
 		ret
 
 # ----------------- Functions private to this file -------------------
- 
+#This function keeps track of my missile linked list and is able to analyze it's current state to perform the correct actions.
 update_missiles:
 	pushl %ebp				#saves base pointer
 	movl %esp, %ebp			#set stack pointer to base pointer value
 	
 	movl mp1_missile_list,%ebx	#save head pointer address as ebx
-	cmpl $0, %ebx				#is the list empty?
+	cmpl $0, %ebx			#is the list empty?
 	je update_end			#if it is, go immediately to the end
-	
-missile_Iteration: #1. sees if missile is off grid, missile reaches destination, missile is currently exploding,missile in transit.
+
+#1. sees if missile is off grid, missile reaches destination, missile is currently exploding,missile in transit.
+missile_Iteration:
 
 	State_Check: 
 	#1) Is Missile Exploding:
@@ -157,46 +165,62 @@ missile_Iteration: #1. sees if missile is off grid, missile reaches destination,
 		jne missile_exploded		#go to missile exploded
 	#2) Is Missile off grid:
 		movl X(%ebx), %eax		#eax = x coord
-		shrl $16, %eax
+		shrl $16, %eax			#shift the x coordinate 16 bits
 		cmpl $0, %eax			#if x coord <0
 		jl remove_missile		#missile is off-grid
 		cmpl $79, %eax 			#if x coord >79
 		jg remove_missile		#missile is off-grid
 		
 		movl Y(%ebx), %esi		#esi = y coord
-		shrl $16, %esi
+		shrl $16, %esi		
 		cmpl $0, %esi			#if y coord <0
 		jl remove_missile		#missile is off-grid
 		cmpl $24, %esi  		#if y coord <24
 		jg remove_missile
 		jmp dest_Check			#missile passes all three conditions, and can Dest_Check:
 		
-	remove_missiles:
-		pushl %edx
-		pushl %eax
+	remove_missiles:			# calls removal of the missile
+		pushl %eax				#save callee registers
+		pushl %ebx				#save callee registers
+		pushl %ecx				#save callee registers	
+		pushl %edx				#save register	
 		pushl %esi
+		pushl %edi
 		call remove_missile		#Calls update_missiles
+		popl %edi
 		popl %esi
-		popl %eax
 		popl %edx
+		popl %ecx
+		popl %ebx
+		popl %eax
 		jmp end_to_loop			#removes the missile from the linked list and frees the memory.
 	
 	
-	#3) Is Missile at Destination:
+	#3) Is Missile at Destination: first I check if the x is at the destination, if it isn't then I don't need to check the Y.
 	dest_Check:	
 		movl X(%ebx), %eax
 		sarl $16, %eax
 		cmpl %eax, DEST_X(%ebx)		#compare x coord with x dest
-		jne update
+		jne update					
 		movl Y(%ebx), %esi
 		sarl $16, %esi
 		cmpl %esi, DEST_Y(%ebx)		#compare y coord with y dest
 		jne update
 		
 	missile_exploded:
+		pushl %eax
+		pushl %ecx				#save callee registers	
+		pushl %edx				#save register	
+		pushl %esi
+		pushl %edi
 		pushl %ebx				#save register	1st arg	
 		call missile_explode	#Calls update_missiles -> See's if any damage, which will return a non-zero. Else zero.
 		popl %ebx				#save return value
+		popl %edi
+		popl %esi
+		popl %edx
+		popl %ecx
+		popl %eax
 		cmpl $0, %eax
 		je no_notify_print
 		call mp1_notify_user
@@ -231,7 +255,7 @@ missile_Iteration: #1. sees if missile is off grid, missile reaches destination,
 		popl %edx
 		jmp explode_loop
 	#4) Missile is fine with smooth sailing
-	update:	 #Adds velocity to current position.
+	update:	 #Adds velocity to current position. And makes current position a space.
 
 		movl Y(%ebx), %esi		#esi = y coord
 		movl X(%ebx), %eax		#eax = x coord 
@@ -241,8 +265,9 @@ missile_Iteration: #1. sees if missile is off grid, missile reaches destination,
 		imull $2, %eax			#		
 		addl %esi, %eax					
 		movb $32, %cl			#Assuming missile is either moving or exploding,
+		pushl %edx
 		call mp1_poke			#replace old position with a space.	
-		
+		popl %edx
 
 		movl VX(%ebx), %esi
 		addl %esi, X(%ebx)		# add's Vx to X coord
@@ -258,8 +283,9 @@ missile_Iteration: #1. sees if missile is off grid, missile reaches destination,
 		imull $160, %eax
 		addl %esi, %eax	
 		movb C(%ebx), %cl			#Assuming missile is either moving or exploding,\
-
+		pushl %edx
 		call mp1_poke			#missile moves to the m.-> Prints new missile location
+		popl %edx
  	explode_loop:	
 		movl (%ebx),%ebx
 	end_to_loop:
@@ -269,6 +295,12 @@ missile_Iteration: #1. sees if missile is off grid, missile reaches destination,
 		leave
 		ret
 		
+#void remove_missile(int * missile)
+# removes the following missile from the linked list
+# Inputs   : int * missile - pointer to the specific missile we'd like to remove....
+
+# Outputs  : 
+# Registers: %ebp - missile pointer, %eax - pointer to the missile right before the current, %esi - to see if eax next is the current missile.
 remove_missile: #%ebx is the pointer to the linked list.
 	pushl %ebp				#saves base pointer
 	movl %esp, %ebp			#set stack pointer to base pointer value
@@ -286,57 +318,85 @@ remove_missile: #%ebx is the pointer to the linked list.
 	remove:
 	movl NEXT(%esi), %ebx		#ebx now points at the missile behind the one that needs removing
 	movl %ebx, NEXT(%eax)
+	pushl %eax				#save callee registers
+	pushl %ebx				#save callee registers
+	pushl %ecx				#save callee registers	
+	pushl %edx				#save register
+	pushl %edi
 	pushl %esi
 	call mp1_free	
 	popl %esi
+	popl %edi
+	popl %edx
+	popl %ecx
+	popl %ebx
+	popl %eax
 	jmp return
 	
 	head_remove:
 	movl NEXT(%ebx), %esi
 	movl %esi, mp1_missile_list	#head now points to the current->next
 	movl mp1_missile_list, %ebx			#update my missile pointer as well
-	pushl %eax							#eax still points at the missile to be removed.
-	call mp1_free
+
+	pushl %esi				#save callee registers
+	pushl %ebx				#save callee registers
+	pushl %ecx				#save callee registers	
+	pushl %edx				#save register
+	pushl %edi
+	pushl %eax
+	call mp1_free	
 	popl %eax
+	popl %edi
+	popl %edx
+	popl %ecx
+	popl %ebx
+	popl %esi
 	
 	return:
 	leave	
 		ret
+# void update_bases()
+# Creates the image of bases on the screen.
+# It will change the bases between being alive and dead.
+# Inputs   : images files for the bases
+# Outputs  : prints to the screen
+# Registers: %ebx - points to the images, %eax - arithematic temp variable to calculate the offset.
 update_bases:
 	pushl %ebp
-	pushl %ebx
 	movl %esp, %ebp
+	pushl %ebx
+
 
 	base_1:
-	leal base_pic, %ebx			#ecx value of dead_base pic
+	leal base_pic, %ebx			#ebx value of dead_base pic
 	movl $0x000000FF, %esi
 	andl base_alive, %esi		#get the address of base alive
 	movl $18, %edi				#edi has 18 in it
 	cmpl $0, %esi				#if the first byte of alive is zero.
 	jne print_one
-	leal dead_base_pic, %ebx			#ecx has the address of alive base pic\
+	leal dead_base_pic, %ebx			#ebx has the address of alive base pic\
 
 	print_one:
 	movl %edi, %eax				#eax now has the x coordinate
 	imull $2, %eax				#doing the offset
 	addl  $3840, %eax				#eax has the position of the base
-	
 	movb (%ebx),%cl				#%cl gets the ascii value at addr ecx(picture)
-	 
+	pushl %edx
 	call mp1_poke				#eax offset from start of video memory, %cl ASCII code of character to write. y*80*2+x*2 = offse
+	popl %edx
 	incl %ebx
 	incl %edi					#increment the x position.
 	cmpl $23,%edi				
 	jl print_one				
 	
 	base_2:
-	leal base_pic, %ebx			#ecx value of dead_base pic
+	leal base_pic, %ebx			#edx value of dead_base pic
 	movl $0x0000FF00, %esi
 	andl base_alive, %esi		#get the address of base alive
 	movl $38, %edi				#edi has 18 in it
 	cmpl $0, %esi				#if the first byte of alive is zero.
 	jne print_two
-	leal dead_base_pic, %ebx	#ecx has the address of alive base pic\
+	leal dead_base_pic, %ebx	#ecx has the address of alive base pic
 
 	print_two:
 	movl %edi, %eax				#eax now has the x coordinate
@@ -344,8 +404,9 @@ update_bases:
 	addl $3840, %eax			#eax has the position of the base
 	
 	movb (%ebx),%cl				#%cl gets the ascii value at addr ecx(picture)
-	 
+	pushl %edx
 	call mp1_poke				#eax offset from start of video memory, %cl ASCII code of character to write. y*80*2+x*2 = offse
+	popl %edx
 	incl %ebx
 	incl %edi					#increment the x position.
 	cmpl $43,%edi				
@@ -366,15 +427,21 @@ update_bases:
 	addl $3840, %eax			#eax has the position of the base
 	
 	movb (%ebx),%cl				#%cl gets the ascii value at addr ecx(picture)
-	 
+	pushl %edx
 	call mp1_poke				#eax offset from start of video memory, %cl ASCII code of character to write. y*80*2+x*2 = offse
+	popl %edx
 	incl %ebx
 	incl %edi					#increment the x position.
 	cmpl $63,%edi				
 	jl print_three
 	popl %ebx
-	popl %ebp
+	leave
 		ret
+# void update_crosshair()
+# Updates the position of the crosshair by drawing its new position
+# Inputs   :
+# Outputs  : prints to the screen
+# Registers: %eax - holds x value, and acts as arithematic temp. %edx - holds y value.
 update_crosshairs:
 	pushl %ebp					#saves base pointer
 	movl %esp, %ebp				#base pointer has new stack
@@ -399,7 +466,6 @@ mp1_ioctl_startgame:
 	movl $0x00FFFFFF, base_alive		# Initialize all bases to be alive.
 	movl $0x0, mp1_missile_list 
 	movl $0x0, mp1_score 
-	leave
 		ret
 
 mp1_ioctl_addmissile: 
@@ -432,11 +498,21 @@ mp1_ioctl_addmissile:
 	jmp finish_adding
 
 	copy_failed:				#copy from user fail
-	pushl %ebx 					# pointer to where the memory failed to copy
-	call mp1_free				# free the memory where the memory was copied to. 
+	pushl %eax				#save callee registers
+	pushl %esi				#save callee registers
+	pushl %ecx				#save callee registers	
+	pushl %edx				#save register
+	pushl %edi
+	pushl %ebx
+	call mp1_free	
 	popl %ebx
+	popl %edi
+	popl %edx
+	popl %ecx
+	popl %esi
+	popl %eax
 	movl $-1, %eax				# return -1 because it failed.
-	
+	addl $4, %esp
 	finish_adding:
 	popl %ebx
 	leave
@@ -472,7 +548,7 @@ mp1_ioctl_movexhairs:
 	jl min_y
 	cmpl $24, crosshairs_y
 	jg max_y
-	jmp print
+	jmp cross_done
 	
 	min_x:				# any coordinate not within the limits are replace.
 	movl $0, crosshairs_x
@@ -486,80 +562,13 @@ mp1_ioctl_movexhairs:
 	max_y:
 	movl $24, crosshairs_y
 	
-	print:
-	/*xorl %eax, %eax
-	xorl %esi, %esi
-	movl crosshairs_x, %eax
-	movl crosshairs_y, %esi
-*/
+	cross_done:
+
 	xorl %eax, %eax			#returns 0
 		ret
 
 mp1_ioctl_getstatus:
-	/*pushl %ebp
-	movl %esp, %ebp
-	movl 8(%ebp), %esi			#pointer to the to*
 
-	xorl %ecx, %ecx
-	pushl $32
-	call mp1_free
-	addl $4, %esp
-	movl $0x000000FF, %edx
-	andl base_alive, %edx		#see if base 1 is alive
-	cmpl $0, %edx 
-	je base_2_life
-	addl $1, %ecx
-	
-	base_2_life:
-	shll $1, %ecx
-	movl $0x0000FF00, %edx
-	andl base_alive, %edx		#get the address of base alive
-	cmpl $0, %edx
-	je base_3_life
-	addl $1, %ecx
-
-	base_3_life:
-	shll $1, %ecx
-	movl $0x00FF0000, %edx
-	andl base_alive, %edx		#get the address of base alive
-	cmpl $0, %edx
-	je score_update
-	addl $1, %ecx
-	
-	score_update:
-	shll $16, %ecx
-	addl mp1_score, %ecx
-	pushl %ecx
-	andl $0, (%eax)				#eax is the pointer to the new memory addr.
-	addl %ecx, (%eax)
-	movl %eax, %edx
-	
-	pushl $32
-	pushl %edx					#from 
-	pushl %esi					#to
-	call mp1_copy_to_user
-	addl $12, %esp	
-	cmpl $0, %eax
-	je success			
-	
-	pushl %esi					# pointer to where the memory failed to copy
-	call mp1_free				# free the memory where the memory was copied to. 
-	popl %esi
-	pushl %edx
-	call mp1_free
-	popl %edx
-	movl $-1, %eax				# return -1 because it failed.
-	leave 
-	ret
-	
-	success:
-	pushl %edx
-	call mp1_free
-	popl %edx
-	movl $0, %eax
-	leave
-	ret
-	*/
 	#I use the stack to do copy_to_user
 	pushl %ebp
 	movl %esp, %ebp
@@ -582,33 +591,44 @@ mp1_ioctl_getstatus:
 
 	base_3_life:
 	shll $1, %ecx
-	movl $0x00FF0000, %edx
+	movl $0x00FF0000, %edx		
 	andl base_alive, %edx		#get the address of base alive
-	cmpl $0, %edx
-	je score_update
+	cmpl $0, %edx				#see's if the base is a live or dead
+	je score_update			
 	addl $1, %ecx
 	
 	score_update:
 	shll $16, %ecx
-	movzwl mp1_score, %ebx
+	movzwl mp1_score, %ebx		#zero extends the score 
 	addl %ebx, %ecx
-	pushl %ecx
-	movl %esp, %edi
+	pushl %ecx					#pushes the value of the score and base lives to the stack
+	movl %esp, %edi				# edi points to where these values are kept
 	
-	pushl $32
-	pushl %edi
-	pushl %esi					#to
+	pushl $4					# 4 bytes, the size of what's being copied.
+	pushl %edi					# from where 
+	pushl %esi					# to the address!
 	call mp1_copy_to_user
 	popl %esi
 	popl %edi
-	addl $4, %esp
+	addl $4, %esp	
 	popl %ecx
 	cmpl $0, %eax
 	je success			
 	
-	pushl %esi					# pointer to where the memory failed to copy
-	call mp1_free				# free the memory where the memory was copied to. 
+	pushl %eax				#save callee registers
+	pushl %ebx				#save callee registers
+	pushl %ecx				#save callee registers	
+	pushl %edx				#save register
+	pushl %edi
+	pushl %esi
+	call mp1_free	
 	popl %esi
+	popl %edi
+	popl %edx
+	popl %ecx
+	popl %ebx
+	popl %eax
+	
 	movl $-1, %eax				# return -1 because it failed.
 	leave 
 	ret
@@ -618,18 +638,34 @@ mp1_ioctl_getstatus:
 	leave
 		ret
 mp1_ioctl_endgame:
-	movl mp1_missile_list, %eax
+	movl mp1_missile_list, %eax	#eax also points to the head
+	
 	Game_Ender:
-	cmpl $0, %eax
+	cmpl $0, %eax				#sees if list is empty
 	je ending
-	movl NEXT(%eax), %eax
+	movl NEXT(%eax), %eax		#goes to the next missilie
+	pushl %eax				#save callee registers
+	pushl %ebx				#save callee registers
+	pushl %ecx				#save callee registers	
+	pushl %edx				#save register
+	pushl %edi
+	pushl %esi
 	pushl mp1_missile_list
-	call mp1_free
+	call mp1_free				# deletes the missilie the headp oints to
 	popl mp1_missile_list
-	movl %eax, mp1_missile_list
-	cmpl $0, mp1_missile_list
+	popl %esi
+	popl %edi
+	popl %edx
+	popl %ecx
+	popl %ebx
+	popl %eax
+	movl %eax, mp1_missile_list		#helps missile head point to the next missile.
+	cmpl $0, mp1_missile_list		#if the linked list is not empty, keep traversing and deleting.
 	jne Game_Ender
 	ending:
 	ret
 jump_table:
 	.long mp1_ioctl_startgame, mp1_ioctl_addmissile, mp1_ioctl_movexhairs, mp1_ioctl_getstatus, mp1_ioctl_endgame
+	
+	
+	
