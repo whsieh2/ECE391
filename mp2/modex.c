@@ -96,7 +96,8 @@ static unsigned short mode_X_CRTC[NUM_CRTC_REGS] = {
     0x9C10, 0x8E11, 0x8F12, 0x2813, 0x0014, 0x9615, 0xB916, 0xE317,
     0x6A18
 };
-//Change x10's register value from x41 to x61 to make the PPM value from 1 to 0.
+//Change x10's register value from x41 to x61 to make the PPM value 
+//from 1 to 0.the bottom portion of the screen is displayed as if the Pixel Shift Count and Byte Panning fields are set to 0. 
 static unsigned char mode_X_attr[NUM_ATTR_REGS * 2] = {
     0x00, 0x00, 0x01, 0x01, 0x02, 0x02, 0x03, 0x03, 
     0x04, 0x04, 0x05, 0x05, 0x06, 0x06, 0x07, 0x07, 
@@ -310,8 +311,7 @@ set_mode_X (void (*horiz_fill_fn) (int, int, unsigned char[SCROLL_X_DIM]),
     }
 
     /* One display page goes at the start of video memory. */
-    //target_img = 0x0000; 
-	target_img = 0xB6;
+    target_img = 0x5A0; 
     /* Map video memory and obtain permission for VGA port access. */
     if (open_memory_and_ports () == -1)
         return -1;
