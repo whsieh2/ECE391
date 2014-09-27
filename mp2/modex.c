@@ -593,7 +593,7 @@ draw_vert_line (int x)
     (*vert_line_fn) (x, show_y, buf);
 
     /* Calculate starting address in build buffer. */
-    addr = img3 + (show_x >> 2) + y * SCROLL_X_WIDTH;
+    addr = img3 + (x >> 2) + show_y * SCROLL_X_WIDTH;
 
     /* Calculate plane offset of first pixel. */
     p_off = (3 - (x & 3));
