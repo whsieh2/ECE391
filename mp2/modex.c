@@ -86,15 +86,11 @@
 static unsigned short mode_X_seq[NUM_SEQUENCER_REGS] = {
     0x0100, 0x2101, 0x0F02, 0x0003, 0x0604
 };
-// Manipulating this make room for the split screen
-// Size of the bar is 16 pixels with +1 above and +1 below. Size = 200-18 +1 because count starts from 0. After multiplying by two
-// because of ModeX and convert to hex, resulting is 16A. So I store 6A in the 18th register, and 1 in the 9th bit.
-// TL;DR Changed xFF18 to x6a18, and x4109 to x0109 to create the split screen size and had to do weird things to specific bits.
-static unsigned short mode_X_CRTC[NUM_CRTC_REGS] = { 
+static unsigned short mode_X_CRTC[NUM_CRTC_REGS] = {
     0x5F00, 0x4F01, 0x5002, 0x8203, 0x5404, 0x8005, 0xBF06, 0x1F07,
-    0x0008, 0x0109, 0x000A, 0x000B, 0x000C, 0x000D, 0x000E, 0x000F,
+    0x0008, 0x4109, 0x000A, 0x000B, 0x000C, 0x000D, 0x000E, 0x000F,
     0x9C10, 0x8E11, 0x8F12, 0x2813, 0x0014, 0x9615, 0xB916, 0xE317,
-    0x6A18
+    0xFF18
 };
 static unsigned char mode_X_attr[NUM_ATTR_REGS * 2] = {
     0x00, 0x00, 0x01, 0x01, 0x02, 0x02, 0x03, 0x03, 
@@ -533,15 +529,7 @@ show_screen ()
     OUTW (0x03D4, (target_img & 0xFF00) | 0x0C);
     OUTW (0x03D4, ((target_img & 0x00FF) << 8) | 0x0D);
 }
-/*
- * show_screen
- *   DESCRIPTION: Show the logical view window on the video display.
- *   INPUTS: none
- *   OUTPUTS: none
- *   RETURN VALUE: none
- *   SIDE EFFECTS: copies from the build buffer to video memory;
- *                 shifts the VGA display source to point to the new image
- */   
+
 void
 status_bar()
 /*
