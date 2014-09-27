@@ -530,8 +530,7 @@ show_screen ()
     OUTW (0x03D4, ((target_img & 0x00FF) << 8) | 0x0D);
 }
 
-void
-status_bar()
+
 /*
  * clear_screens
  *   DESCRIPTION: Fills the video memory with zeroes. 
