@@ -603,7 +603,7 @@ draw_vert_line (int x)
         addr[p_off * SCROLL_SIZE] = buf[i];
 
 	    addr+=SCROLL_X_WIDTH;
-	}
+	
     }
 
     /* Return success. */
