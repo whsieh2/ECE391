@@ -561,4 +561,15 @@ unsigned char font_data[256][16] = {
     {0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
      0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}
 };
+//Each character is 8x16. We are only concerned with width, 8 pixels
+void text_to_graphics(string label)
+{	
+	if (label.length() > 40) //create buffer because the string is too long
+		create_buffer(label);
+	
 
+
+}
+void create_buffer()
+{
+}
