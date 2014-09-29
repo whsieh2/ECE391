@@ -73,6 +73,7 @@
 #define SCREEN_SIZE	(SCROLL_SIZE * 4 + 1)
 #define BUILD_BUF_SIZE  (SCREEN_SIZE + 20000) 
 #define BUILD_BASE_INIT ((BUILD_BUF_SIZE - SCREEN_SIZE) / 2)
+#define STATUS_SIZE 1440
 
 /* Mode X and general VGA parameters */
 #define VID_MEM_SIZE       131072
@@ -148,6 +149,8 @@ static void fill_palette_text ();
 static void write_font_data ();
 static void set_text_mode_3 (int clear_scr);
 static void copy_image (unsigned char* img, unsigned short scr_addr);
+void create_status_bar();
+static void copy_status_bar (unsigned char* img, unsigned short scr_addr);
 
 
 /* 
@@ -519,13 +522,14 @@ show_screen ()
 
     /* Calculate the source address. */
     addr = img3 + (show_x >> 2) + show_y * SCROLL_X_WIDTH;
-
+	create_status_bar();
     /* Draw to each plane in the video memory. */
     for (i = 0; i < 4; i++) {
 	SET_WRITE_MASK (1 << (i + 8));
 	copy_image (addr + ((p_off - i + 4) & 3) * SCROLL_SIZE + (p_off < i), 
 	            target_img);
     }
+	
 
     /* 
      * Change the VGA registers to point the top left of the screen
@@ -534,7 +538,21 @@ show_screen ()
     OUTW (0x03D4, (target_img & 0xFF00) | 0x0C);
     OUTW (0x03D4, ((target_img & 0x00FF) << 8) | 0x0D);
 }
-
+void create_status_bar()
+{
+	unsigned char buf[4*STATUS_SIZE];//*sizeof(unsigned char)]=;
+    int i;		  /* loop index over video planes        */
+	for (i=0;i<(4*STATUS_SIZE);i++)
+		buf[i] = 27;
+		
+	text_to_graphics(buf, "ABCDEFGabcdefg");
+	/* draw to each plane in the video memory. */
+    for (i = 0; i < 4; i++) {
+		SET_WRITE_MASK (1 << (i + 8));
+		copy_status_bar(buf + i*1440,0x0000);
+    }
+	
+}
 
 /*
  * clear_screens
@@ -622,6 +640,7 @@ draw_vert_line (int x)
  *                line should be offset from the top of the logical view 
  *                window screen by the given number of pixels.  
  *   INPUTS: y -- the 0-based pixel row number of the line to be drawn
+ *                within the logical view window (equivalent to the number
  *                within the logical view window (equivalent to the number
  *                of pixels from the top pixel to the line to be drawn)
  *   OUTPUTS: none
@@ -1000,7 +1019,23 @@ set_text_mode_3 (int clear_scr)
     VGA_blank (0);			         /* unblank the screen      */
 }
 
-
+static void
+copy_status_bar (unsigned char* img, unsigned short scr_addr)
+{
+    /* 
+     * memcpy is actually probably good enough here, and is usually
+     * implemented using ISA-specific features like those below,
+     * but the code here provides an example of x86 string moves
+     */
+    asm volatile (
+        "cld                                                 ;"
+       	"movl $1440,%%ecx                                   ;"
+       	"rep movsb    # copy ECX bytes from M[ESI] to M[EDI]  "
+      : /* no outputs */
+      : "S" (img), "D" (mem_image + scr_addr) 
+      : "eax", "ecx", "memory"
+    );
+}
 /*
  * copy_image
  *   DESCRIPTION: Copy one plane of a screen from the build buffer to the 
