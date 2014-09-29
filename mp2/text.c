@@ -561,15 +561,47 @@ unsigned char font_data[256][16] = {
     {0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
      0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}
 };
+
 //Each character is 8x16. We are only concerned with width, 8 pixels
-void text_to_graphics(string label)
+/*
+ * text_to_graphics
+ *   DESCRIPTION: Create an array that contains the buffer information based on a string
+ *   INPUTS: pointer to the string
+ *   OUTPUTS: none
+ *   RETURN VALUE: none
+ *   SIDE EFFECTS: Writes text to the status bar
+ */  
+void text_to_graphics(unsigned char *buf, const char* string)
 {	
-	if (label.length() > 40) //create buffer because the string is too long
-		create_buffer(label);
-	
-
-
-}
-void create_buffer()
-{
+	int length=0;
+	int x,i,k, j, mask, letterValue;
+	while (string[length] != 0)
+	{
+		length++;
+	}
+		for(x=0; x<length; x++)
+		{
+			letterValue = (int)(string[x]);
+			for(i=0; i<16; i++)
+			{
+				for (k=7, mask = 0x80; k>=0; k--)
+				{	
+					if((mask & font_data[letterValue][i])==mask)
+					{
+						for(j=0; j<4;j++)
+						{
+							if(j <= 3){ 
+								buf[80 + (80*i) + ((j%4)*1440) + 2*x] = 20; 
+							} 
+							else{ 
+								buf[80 + (80*i) + ((j%4)*1440)+1 + 2*x] = 20; 
+							}
+							mask = mask >> 1;
+						}
+						
+					}
+					
+				}
+			}
+		}
 }
