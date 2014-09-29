@@ -249,6 +249,14 @@ game_loop ()
 
 	show_screen ();
 
+	if (status_msg[0]=='\0'){
+	
+				create_status_bar(room_name(game_info.where));
+				status_msg(get_typed_command ());	
+		}
+	else{
+			create_status_bar(status_msg);
+		}
 	/*
 	 * Wait for tick.  The tick defines the basic timing of our
 	 * event loop, and is the minimum amount of time between events.

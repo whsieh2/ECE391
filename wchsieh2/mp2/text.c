@@ -584,23 +584,23 @@ void text_to_graphics(unsigned char *buf, const char* string)
 			letterValue = (int)(string[x]);
 			for(i=0; i<16; i++)
 			{
-				for (k=7, mask = 0x80; k>=0; k--)
+				for (k=0, mask = 0x80; k<8; k++)
 				{	
 					if((mask & font_data[letterValue][i])==mask)
 					{
 						for(j=0; j<4;j++)
 						{
-							if(j <= 3){ 
-								buf[80 + (80*i) + ((j%4)*1440) + 2*x] = 20; 
+							if(k <= 3){ 
+								buf[80 + (80*i) + (k%4)*1440 + 2*x] = 20; 
 							} 
 							else{ 
-								buf[80 + (80*i) + ((j%4)*1440)+1 + 2*x] = 20; 
+								buf[80 + (80*i) + (k%4)*1440+1 + 2*x] = 20; 
 							}
-							mask = mask >> 1;
+							
 						}
 						
 					}
-					
+					mask = mask >> 1;
 				}
 			}
 		}

@@ -522,7 +522,6 @@ show_screen ()
 
     /* Calculate the source address. */
     addr = img3 + (show_x >> 2) + show_y * SCROLL_X_WIDTH;
-	create_status_bar();
     /* Draw to each plane in the video memory. */
     for (i = 0; i < 4; i++) {
 	SET_WRITE_MASK (1 << (i + 8));
@@ -538,14 +537,14 @@ show_screen ()
     OUTW (0x03D4, (target_img & 0xFF00) | 0x0C);
     OUTW (0x03D4, ((target_img & 0x00FF) << 8) | 0x0D);
 }
-void create_status_bar()
+void create_status_bar(const char* s)//unsigned char *buf)
 {
 	unsigned char buf[4*STATUS_SIZE];//*sizeof(unsigned char)]=;
     int i;		  /* loop index over video planes        */
 	for (i=0;i<(4*STATUS_SIZE);i++)
 		buf[i] = 27;
 		
-	text_to_graphics(buf, "ABCDEFGabcdefg");
+	text_to_graphics(buf, s);
 	/* draw to each plane in the video memory. */
     for (i = 0; i < 4; i++) {
 		SET_WRITE_MASK (1 << (i + 8));
