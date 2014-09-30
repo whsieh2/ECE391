@@ -571,17 +571,36 @@ unsigned char font_data[256][16] = {
  *   RETURN VALUE: none
  *   SIDE EFFECTS: Writes text to the status bar
  */  
-void text_to_graphics(unsigned char *buf, const char* string)
+void text_to_graphics(unsigned char *buf, const char*string, int type_of_conversion)
 {	
 	int length=0;
-	int x,i,k, j, mask, letterValue;
+	int typeLength=0;
+	int x,i,k, j, mask, letterValue, tempVal;
+	 
+	char tempString[20];
+	//int lenghtofShibo = sizeof(string)/sizeof(char*);
 	while (string[length] != 0)
 	{
 		length++;
 	}
-		for(x=0; x<length; x++)
+	tempVal=0;
+	if(type_of_conversion)
+	{
+		for(i=0;i<(20-length);i++)
+			tempString[i] = ' ';
+		for(i=(20-length); i<20; i++)
+			tempString[i] = string[tempVal];
+			tempVal++;
+	}
+	if(type_of_conversion)
+		length = 20;
+	for(x=0; x<length; x++)
 		{
-			letterValue = (int)(string[x]);
+			//if(type_of_conversion)
+				letterValue = (int)(tempString[x]);
+			//else
+				letterValue = (int)(string[x]);
+			
 			for(i=0; i<16; i++)
 			{
 				for (k=0, mask = 0x80; k<8; k++)
@@ -591,10 +610,10 @@ void text_to_graphics(unsigned char *buf, const char* string)
 						for(j=0; j<4;j++)
 						{
 							if(k <= 3){ 
-								buf[80 + (80*i) + (k%4)*1440 + 2*x] = 20; 
+								buf[80 + (80*i) + (k%4)*1440 + 2*x + type_of_conversion*(60-length)] = 20; //(80-length)*i
 							} 
 							else{ 
-								buf[80 + (80*i) + (k%4)*1440+1 + 2*x] = 20; 
+								buf[80 + (80*i) + (k%4)*1440+1 + 2*x + type_of_conversion*(60-length)] = 20; 
 							}
 							
 						}

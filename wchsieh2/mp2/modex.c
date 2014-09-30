@@ -537,14 +537,24 @@ show_screen ()
     OUTW (0x03D4, (target_img & 0xFF00) | 0x0C);
     OUTW (0x03D4, ((target_img & 0x00FF) << 8) | 0x0D);
 }
-void create_status_bar(const char* s)//unsigned char *buf)
+void create_status_bar(const char* room, const char* status, const char* typed)
 {
-	unsigned char buf[4*STATUS_SIZE];//*sizeof(unsigned char)]=;
+	unsigned char buf[4*STATUS_SIZE];
     int i;		  /* loop index over video planes        */
+	
 	for (i=0;i<(4*STATUS_SIZE);i++)
-		buf[i] = 27;
+		buf[i] = 2;	
+	if (status[0]!='\0'){
+		i=0;
+		text_to_graphics(buf, status, i);
+		}
+	else{
+		i=0;
+		text_to_graphics(buf, room,  i);
+		i=1;
+		text_to_graphics(buf, typed, i);
+	}
 		
-	text_to_graphics(buf, s);
 	/* draw to each plane in the video memory. */
     for (i = 0; i < 4; i++) {
 		SET_WRITE_MASK (1 << (i + 8));
