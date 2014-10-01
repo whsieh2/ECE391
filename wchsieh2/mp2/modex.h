@@ -130,6 +130,9 @@ extern void show_screen ();
 /* clear the video memory in mode X */
 extern void clear_screens ();
 
+/* displays strings to the status bar */
+//void create_status_bar(const char* room, const char* status, const char* typed)
+
 /* draw a horizontal line at vertical pixel y within the logical view window */
 extern int draw_horiz_line (int y);
 
