@@ -625,7 +625,7 @@ void text_to_graphics(unsigned char *buf, const char*string, int type_of_convers
 							} 
 							else{ 
 								//draws the second half of the character
-								buf[STAT_SIZE + (STAT_SIZE*i) + (k%4)*1440+1 + 2*x + message_pos] = 50; 
+								buf[STAT_SIZE + (STAT_SIZE*i) + (k%4)*1440+1 + 2*x + message_pos] = 12; 
 							}
 							
 						}
