@@ -537,17 +537,29 @@ show_screen ()
     OUTW (0x03D4, (target_img & 0xFF00) | 0x0C);
     OUTW (0x03D4, ((target_img & 0x00FF) << 8) | 0x0D);
 }
+/*
+ * create_status_bar
+ *   DESCRIPTION: Calls text_to_graphics to fill the buffer with font data to be displayed. Function that will 
+				fill screen with information from the buffer.
+ *   INPUTS: room string, status string, and typed string. 
+ *   OUTPUTS: strings are displayed on the monitor
+ *   RETURN VALUE: none
+ *   SIDE EFFECTS: User can only type 20 characters max.
+ */   
 void create_status_bar(const char* room, const char* status, const char* typed)
 {
 	unsigned char buf[4*STATUS_SIZE];
-    int i;		  /* loop index over video planes        */
-	
+    int i;		 
+	//Loops to fill the buffer with the color dark blue. (background color of the status bar).
 	for (i=0;i<(4*STATUS_SIZE);i++)
 		buf[i] = 2;	
+	//The if loops see's what string to input to text_to_graph to fill the buffer.
+	//See's if the status has a status, which takes priority on the status bar	
 	if (status[0]!='\0'){
-		i=0;
+		i=2;
 		text_to_graphics(buf, status, i);
 		}
+	//If the status bar has nothing, we will display the room information and whatever the usertypes.
 	else{
 		i=0;
 		text_to_graphics(buf, room,  i);
@@ -558,7 +570,7 @@ void create_status_bar(const char* room, const char* status, const char* typed)
 	/* draw to each plane in the video memory. */
     for (i = 0; i < 4; i++) {
 		SET_WRITE_MASK (1 << (i + 8));
-		copy_status_bar(buf + i*1440,0x0000);
+		copy_status_bar(buf + i*STATUS_SIZE,0x0000);
     }
 	
 }
@@ -1027,7 +1039,16 @@ set_text_mode_3 (int clear_scr)
     write_font_data ();                          /* copy fonts to video mem */
     VGA_blank (0);			         /* unblank the screen      */
 }
-
+/*
+ * copy_status
+ *   DESCRIPTION: Copy one plane of a screen from the build buffer to the 
+ *                video memory.
+ *   INPUTS: img -- a pointer to a single screen plane in the build buffer
+ *           scr_addr -- the destination offset in video memory
+ *   OUTPUTS: none
+ *   RETURN VALUE: none
+ *   SIDE EFFECTS: copies a plane from the build buffer to video memory
+ */   
 static void
 copy_status_bar (unsigned char* img, unsigned short scr_addr)
 {

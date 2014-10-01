@@ -36,7 +36,7 @@
 #include <string.h>
 
 #include "text.h"
-
+#define STAT_SIZE	80
 
 /* 
  * These font data were read out of video memory during text mode and
@@ -565,60 +565,73 @@ unsigned char font_data[256][16] = {
 //Each character is 8x16. We are only concerned with width, 8 pixels
 /*
  * text_to_graphics
- *   DESCRIPTION: Create an array that contains the buffer information based on a string
- *   INPUTS: pointer to the string
- *   OUTPUTS: none
+ *   DESCRIPTION: Fills the buffer according with font data.
+ *   INPUTS: buffer pointer, string to be displayed on the screen, type of string (user, room info, status)
+ *   OUTPUTS: updates the buffer with the correct display information
  *   RETURN VALUE: none
- *   SIDE EFFECTS: Writes text to the status bar
+ *   SIDE EFFECTS: User can type a maximum of 20 characters
  */  
 void text_to_graphics(unsigned char *buf, const char*string, int type_of_conversion)
 {	
-	int length=0;
-	int typeLength=0;
-	int x,i,k, j, mask, letterValue, tempVal;
-	 
-	char tempString[20];
-	//int lenghtofShibo = sizeof(string)/sizeof(char*);
+	int x,i,k,j,mask,letterValue,message_pos;	//variables described below in usage. 	
+	int length=0;								//Length of string(duh)
 	while (string[length] != 0)
 	{
 		length++;
 	}
-	tempVal=0;
-	if(type_of_conversion)
-	{
-		for(i=0;i<(20-length);i++)
-			tempString[i] = ' ';
-		for(i=(20-length); i<20; i++)
-			tempString[i] = string[tempVal];
-			tempVal++;
+	//Based on the input int, the string is to be positioned differently on the monitor.
+	switch(type_of_conversion)					
+	{	
+		//The message to display is the room information, is on the left
+		case(0): {
+				message_pos =0;
+				break;
+				}
+		//The message to display whatever the user types, is right justified. 
+		case(1):{ 
+				message_pos = STAT_SIZE - length * 2;
+				break;
+				}
+		//The message to display is the status, is centered.
+		case(2): {
+				message_pos = STAT_SIZE - length *  2;
+				message_pos = message_pos/2;
+					break;
+					}
+		default: message_pos = 0;
 	}
-	if(type_of_conversion)
-		length = 20;
+	//Outer most loop iterates through the string. 
 	for(x=0; x<length; x++)
 		{
-			//if(type_of_conversion)
-				letterValue = (int)(tempString[x]);
-			//else
-				letterValue = (int)(string[x]);
+			//Has the ASCII value.
+			letterValue = (int)(string[x]); 
 			
+			//Iterates the 16 lines we write to on the screen
 			for(i=0; i<16; i++)
 			{
+				//Iterates the 8 bits of font data.
 				for (k=0, mask = 0x80; k<8; k++)
 				{	
+					//sees if the mask, which has a one 1 bit as the most significant bit matches up with the corresponding 
+					//pixel font data.
 					if((mask & font_data[letterValue][i])==mask)
 					{
+						//Iterates the 4 different planes
 						for(j=0; j<4;j++)
 						{
 							if(k <= 3){ 
-								buf[80 + (80*i) + (k%4)*1440 + 2*x + type_of_conversion*(60-length)] = 20; //(80-length)*i
+								//draws the first half of the character
+								buf[STAT_SIZE + (STAT_SIZE*i) + (k%4)*1440 + 2*x + message_pos] = 12; 
 							} 
 							else{ 
-								buf[80 + (80*i) + (k%4)*1440+1 + 2*x + type_of_conversion*(60-length)] = 20; 
+								//draws the second half of the character
+								buf[STAT_SIZE + (STAT_SIZE*i) + (k%4)*1440+1 + 2*x + message_pos] = 50; 
 							}
 							
 						}
 						
 					}
+					//bit shifts the mask for the other 8 bits of font data.
 					mask = mask >> 1;
 				}
 			}
