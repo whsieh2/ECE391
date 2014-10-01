@@ -250,6 +250,7 @@ game_loop ()
 	show_screen ();
 	
 	pthread_mutex_lock(&msg_lock);
+	//we call create_status to fill the status bar with 3 different strings. Different strings will be displayed at different tiems.
 	create_status_bar(room_name(game_info.where),status_msg,get_typed_command());
 	pthread_mutex_unlock(&msg_lock);
 	/*
