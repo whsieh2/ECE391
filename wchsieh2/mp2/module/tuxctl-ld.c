@@ -251,7 +251,7 @@ tuxctl_ldisc_put(struct tty_struct *tty, char const *buf, int n)
 {
 	tuxctl_ldisc_data_t *data;
 	unsigned long flags;
-
+	
 	spin_lock_irqsave(&tuxctl_ldisc_lock, flags);
 
 	data = tty->disc_data;

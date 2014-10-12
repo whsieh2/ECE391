@@ -42,7 +42,8 @@
 
 
 #include "text.h"
-
+#include "photo_headers.h"
+#include "types.h"
 
 /* 
  * IMAGE  is the whole screen in mode X: 320x200 pixels in our flavor.
@@ -129,6 +130,8 @@ extern void show_screen ();
 
 /* clear the video memory in mode X */
 extern void clear_screens ();
+
+extern void set_palette (photo_t* p);
 
 /* displays strings to the status bar */
 //void create_status_bar(const char* room, const char* status, const char* typed)

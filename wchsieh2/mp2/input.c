@@ -53,9 +53,9 @@
 #include <termio.h>
 #include <termios.h>
 #include <unistd.h>
-
 #include "assert.h"
 #include "input.h"
+#include "module/tuxctl-ioctl.h"
 
 /* set to 1 and compile this file by itself to test functionality */
 #define TEST_INPUT_DRIVER 0
@@ -66,7 +66,7 @@
 
 /* stores original terminal settings */
 static struct termios tio_orig;
-
+static char fd;
 
 /* 
  * init_input
@@ -84,7 +84,12 @@ int
 init_input ()
 {
     struct termios tio_new;
-
+	fd = open("/dev/ttyS0", O_RDWR | O_NOCTTY);
+	int ldisc_num = N_MOUSE;
+	ioctl(fd, TIOCSETD, &ldisc_num);
+	ioctl(fd, TUX_INIT);
+	ioctl(fd, TUX_BUTTONS, 0x00000000);
+	 ioctl(fd, TUX_SET_LED, 0x03FDABCD);
     /*
      * Set non-blocking mode so that stdin can be read without blocking
      * when no new keystrokes are available.
@@ -318,6 +323,7 @@ display_time_on_tux (int num_seconds)
 int
 main ()
 {
+	
     cmd_t last_cmd = CMD_NONE;
     cmd_t cmd;
     static const char* const cmd_name[NUM_COMMANDS] = {

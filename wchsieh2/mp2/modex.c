@@ -49,6 +49,9 @@
 
 #include "modex.h"
 #include "text.h"
+#include "photo.h"
+#include "photo_headers.h"
+#include "types.h"
 
 
 /* 
@@ -867,6 +870,11 @@ set_graphics_registers (unsigned short table[NUM_GRAPHICS_REGS])
 {
     REP_OUTSW (0x03CE, table, NUM_GRAPHICS_REGS);
 }
+struct photo_t {
+    photo_header_t hdr;			/* defines height and width */
+    uint8_t        palette[192][3];     /* optimized palette colors */
+    uint8_t*       img;                 /* pixel data               */
+};
 
 
 /*
@@ -923,6 +931,16 @@ fill_palette_mode_x ()
 
     /* Write all 64 colors from array. */
     REP_OUTSB (0x03C9, palette_RGB, 64 * 3);
+}
+void
+set_palette (photo_t* p)
+{
+ /* Start writing at color 64. */
+    OUTB (0x03C8, 0x40);
+
+    /* Write all 64 colors from array. */
+    REP_OUTSB (0x03C9, p->palette, 192 * 3);
+
 }
 
 
