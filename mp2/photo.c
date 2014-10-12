@@ -45,6 +45,7 @@
 #include "world.h"
 
 
+
 /* types local to this file (declared in types.h) */
 
 /* 
@@ -54,7 +55,7 @@
  * Pixel data are stored as one-byte values starting from the upper
  * left and traversing the top row before returning to the left of
  * the second row, and so forth.  No padding should be used.
- */
+ */ 
 struct photo_t {
     photo_header_t hdr;			/* defines height and width */
     uint8_t        palette[192][3];     /* optimized palette colors */
@@ -74,6 +75,11 @@ struct image_t {
     photo_header_t hdr;			/* defines height and width */
     uint8_t*       img;                 /* pixel data               */
 };
+/*struct octree_t {
+	unsigned pixelCount;
+	uint16_t color;
+	uint16_t rgb[3];
+};*/
 
 
 /* file-scope variables */
@@ -85,6 +91,7 @@ struct image_t {
  * by calling prep_room.
  */
 static const room_t* cur_room = NULL; 
+static int cmpfunc (void const *elem1, void const *elem2);
 
 
 /* 
@@ -317,6 +324,7 @@ prep_room (const room_t* r)
 {
     /* Record the current room. */
     cur_room = r;
+	set_palette(room_photo(r));
 }
 
 
@@ -418,8 +426,20 @@ read_photo (const char* fname)
     uint16_t x;		/* index over image columns */
     uint16_t y;		/* index over image rows    */
     uint16_t pixel;	/* one pixel from the file  */
-
-    /* 
+	
+	int index;
+	int i, red, green, blue;
+	octree_t levelFour[4096];
+	octree_t levelTwo[64];
+	for (i=0;i<4096;i++)
+	{
+		levelFour[i].pixelCount=0;
+	}
+	for (i=0;i<64;i++)
+	{
+		levelTwo[i].pixelCount=0;
+    }
+	/* 
      * Open the file, allocate the structure, read the header, do some
      * sanity checks on it, and allocate space to hold the photo pixels.
      * If anything fails, clean up as necessary and return NULL.
@@ -443,7 +463,7 @@ read_photo (const char* fname)
 	}
 	return NULL;
     }
-
+	
     /* 
      * Loop over rows from bottom to top.  Note that the file is stored
      * in this order, whereas in memory we store the data in the reverse
@@ -476,15 +496,124 @@ read_photo (const char* fname)
 	     * the game puts up a photo, you should then change the palette 
 	     * to match the colors needed for that photo.
 	     */
-	    p->img[p->hdr.width * y + x] = (((pixel >> 14) << 4) |
+	    /*p->img[p->hdr.width * y + x] = (((pixel >> 14) << 4) |
 					    (((pixel >> 9) & 0x3) << 2) |
-					    ((pixel >> 3) & 0x3));
+					    ((pixel >> 3) & 0x3));*/
+	
+		index = ((((pixel>>12)<<8)&0xF00) | (((pixel<<5)>>8)&0x0F0) | (((pixel>>1)&0x00F))); //3 groups of 4 bit RGB values.
+		levelFour[index].rgb[0] += ((pixel>>12)&0x00F);
+		levelFour[index].rgb[1] += ((pixel>>7)&0x00F);
+		levelFour[index].rgb[2] += ((pixel>>1)&0x00F);
+		levelFour[index].color = pixel;
+		levelFour[index].pixelCount++;
+		
 	}
     }
+	
+	
+	makePalette(p,levelFour, levelTwo);
+	
+	fseek(in, sizeof(p->hdr), SEEK_SET);
+	/* 
+     * Loop over rows from bottom to top.  Note that the file is stored
+     * in this order, whereas in memory we store the data in the reverse
+     * order (top to bottom).
+     */
+    for (y = p->hdr.height; y-- > 0; ) {
 
+	/* Loop over columns from left to right. */
+	for (x = 0; p->hdr.width > x; x++) {
+
+	    /* 
+	     * Try to read one 16-bit pixel.  On failure, clean up and 
+	     * return NULL.
+	     */
+	    if (1 != fread (&pixel, sizeof (pixel), 1, in)) {
+		free (p->img);
+		free (p);
+	        (void)fclose (in);
+		return NULL;
+
+	    }
+		
+	red = (pixel>>11)&0x01F;
+	green = (pixel>>5)&0x03F;
+	blue = (pixel)&0x01F;
+	
+	
+	for (i=0; i<128; i++)
+	{
+		if((red>>1 == p->palette[i][0])&&(green>>2 == p->palette[i][1])&&(blue>>1 == p->palette[i][2]))
+		{
+			p->img[p->hdr.width * y + x] = i +64;
+			break;
+		}
+	}
+	for (i=128; i<192; i++)
+	{
+		if((red>>3 == p->palette[i][0])&&(green>>4 == p->palette[i][1])&&(blue>>3 == p->palette[i][2]))
+		{
+			p->img[p->hdr.width * y + x] = i + 64;
+			break;
+		}
+	
+	
+	}
+		
+	}
+    }
     /* All done.  Return success. */
     (void)fclose (in);
     return p;
 }
+void makePalette(photo_t* p, octree_t* levelFour, octree_t* levelTwo)
+{
+	int a, b, c;
+	int pixel_count;
+	int index;
+	uint16_t pixelColor;
+	int rest_of_colors = 4096 - 128;
+	
+	qsort(levelFour, 4096, sizeof(octree_t), cmpfunc);
+	
+	for (a = rest_of_colors; a<4096; a++)
+	{
+		pixel_count = levelFour[a].pixelCount;
+		if( pixel_count!=0)
+		{
+			for(b= 0; b<3; b++)
+			{
+				p->palette[a-rest_of_colors][b] = levelFour[a].rgb[b] / pixel_count;
+			}
+		}
+	}
+	for (c = 0; c<rest_of_colors; c++)
+	{
+		pixelColor = levelFour[c].color;
+		index = (((pixelColor>>10)&0x30) | ((pixelColor>>7)&0xC) | ((pixelColor>>3)&0x3)); //3 groups of 2 bit RGB values.
+		levelTwo[index].rgb[0] += (	(pixelColor>>14)&0x003);
+		levelTwo[index].rgb[1] += ((pixelColor>>9)&0x003);
+		levelTwo[index].rgb[2] += ((pixelColor>>3)&0x003);
+		levelTwo[index].color = pixelColor;
+		levelTwo[index].pixelCount++;
+	}
+	for (a = 0; a<64; a++)
+	{
+		pixel_count = levelTwo[a].pixelCount;
+		if( pixel_count!=0)
+		{
+			for(b= 0; b<3; b++)
+			{
+				p->palette[a+128][b] = levelTwo[a].rgb[b] / pixel_count;
+			}
+		}
+	}
+	
 
-
+}
+int 
+cmpfunc (void const *elem1, void const *elem2)
+{
+//(octree_t*)
+	return ((((octree_t*)elem2)->pixelCount) - (((octree_t*)elem1)->pixelCount));
+}

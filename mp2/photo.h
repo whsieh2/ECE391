@@ -52,6 +52,11 @@
 #define MAX_OBJECT_WIDTH  160
 #define MAX_OBJECT_HEIGHT 100
 
+typedef struct octree_t {
+	unsigned pixelCount;
+	uint16_t color;
+	uint16_t rgb[3];
+} octree_t;
 
 /* Fill a buffer with the pixels for a horizontal line of current room. */
 extern void fill_horiz_buffer (int x, int y, unsigned char buf[SCROLL_X_DIM]);
@@ -80,9 +85,12 @@ extern void prep_room (const room_t* r);
 /* Read object image from a file into a dynamically allocated structure. */
 extern image_t* read_obj_image (const char* fname);
 
+
 /* Read room photo from a file into a dynamically allocated structure. */
 extern photo_t* read_photo (const char* fname);
 
+extern void makePalette (photo_t* p, octree_t* levelFour, octree_t* levelTwo);
+//extern void makePalette (photo_t* p, void* levelFour, void* levelTwo);
 /* 
  * N.B.  I'm aware that Valgrind and similar tools will report the fact that
  * I chose not to bother freeing image data before terminating the program.

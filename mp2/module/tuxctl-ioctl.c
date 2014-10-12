@@ -45,6 +45,22 @@ void tuxctl_handle_packet (struct tty_struct* tty, unsigned char* packet)
     c = packet[2];
 
     /*printk("packet : %x %x %x\n", a, b, c); */
+	
+	switch(a)
+	{
+		case(MTCP_ACK):
+			return 0;
+		case(MTCP_BIOC_EVENT):
+			return 0;
+		case(MTCP_RESET):
+			printk("reset \n");
+			return 0;
+		default:
+			return 0;
+		
+	
+	
+	}
 }
 
 /******** IMPORTANT NOTE: READ THIS BEFORE IMPLEMENTING THE IOCTLS ************
@@ -66,8 +82,13 @@ tuxctl_ioctl (struct tty_struct* tty, struct file* file,
 {
     switch (cmd) {
 	case TUX_INIT:
+		//spin_lock_init(
+		printk("Init");
+		
 	case TUX_BUTTONS:
+		printk("buttons");
 	case TUX_SET_LED:
+		printk("leds");
 	default:
 	    return -EINVAL;
     }
