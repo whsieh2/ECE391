@@ -428,11 +428,12 @@ read_photo (const char* fname)
     uint16_t pixel;	/* one pixel from the file  */
 	
 	int index;
-	int i, red, green, blue;
+	uint16_t i, red, green, blue, redPalette, greenPalette,bluePalette;
 	octree_t levelFour[4096];
 	octree_t levelTwo[64];
 	for (i=0;i<4096;i++)
 	{
+
 		levelFour[i].pixelCount=0;
 	}
 	for (i=0;i<64;i++)
@@ -543,21 +544,24 @@ read_photo (const char* fname)
 	
 	for (i=0; i<128; i++)
 	{
-		if((red>>1 == p->palette[i][0])&&(green>>2 == p->palette[i][1])&&(blue>>1 == p->palette[i][2]))
+		redPalette = p->palette[i][0];
+		greenPalette = p->palette[i][1];
+		bluePalette = p->palette[i][2];
+		if((red>>1 == redPalette>>2)&&(green>>2 == greenPalette>>2)&&(blue>>1 == bluePalette>>2))
 		{
 			p->img[p->hdr.width * y + x] = i +64;
-			break;
 		}
 	}
 	for (i=128; i<192; i++)
 	{
-		if((red>>3 == p->palette[i][0])&&(green>>4 == p->palette[i][1])&&(blue>>3 == p->palette[i][2]))
+		redPalette = p->palette[i][0];
+		greenPalette = p->palette[i][1];
+		bluePalette = p->palette[i][2];
+		if((red>>3 == redPalette>>4)&&(green>>4 == greenPalette>>4)&&(blue>>3 == bluePalette>>4))
 		{
 			p->img[p->hdr.width * y + x] = i + 64;
-			break;
+			
 		}
-	
-	
 	}
 		
 	}
@@ -583,7 +587,7 @@ void makePalette(photo_t* p, octree_t* levelFour, octree_t* levelTwo)
 		{
 			for(b= 0; b<3; b++)
 			{
-				p->palette[a-rest_of_colors][b] = levelFour[a].rgb[b] / pixel_count;
+				p->palette[a-rest_of_colors][b] = (levelFour[a].rgb[b]) / pixel_count;
 			}
 		}
 	}
@@ -604,7 +608,7 @@ void makePalette(photo_t* p, octree_t* levelFour, octree_t* levelTwo)
 		{
 			for(b= 0; b<3; b++)
 			{
-				p->palette[a+128][b] = levelTwo[a].rgb[b] / pixel_count;
+				p->palette[a+128][b] = (levelTwo[a].rgb[b]) / pixel_count;
 			}
 		}
 	}
