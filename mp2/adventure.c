@@ -302,6 +302,7 @@ game_loop ()
 	 */
 	
 	cmd = get_command ();
+	get_tux_command();
 	switch (cmd) {
 	    case CMD_UP:    move_photo_down ();  break;
 	    case CMD_RIGHT: move_photo_left ();  break;

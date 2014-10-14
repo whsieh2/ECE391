@@ -30,7 +30,9 @@
 	printk(KERN_DEBUG "%s: " str, __FUNCTION__, ## __VA_ARGS__)
 int inittux(struct tty_struct* tty);
 int set_led(struct tty_struct* tty, unsigned long arg);
-
+int set_buttons(struct tty_struct* tty, unsigned long arg);
+uint8_t button_packet[2];
+uint8_t button[1];
 unsigned long hexdriver(unsigned long val, unsigned long dec);
 /************************ Protocol Implementation *************************/
 
@@ -42,49 +44,44 @@ unsigned long hexdriver(unsigned long val, unsigned long dec);
 void tuxctl_handle_packet (struct tty_struct* tty, unsigned char* packet)
 {
     unsigned a, b, c;
-	uint8_t button_packet[1];
 
     a = packet[0]; /* Avoid printk() sign extending the 8-bit */
     b = packet[1]; /* values when printing them. */
     c = packet[2];
 
-    /*printk("packet : %x %x %x\n", a, b, c); */
+    printk("packet : %x %x %x\n", a, b, c); 
 	
 	switch(a)
 	{
-
-		case(MTCP_BIOC_EVENT):
-			printk("bioc event time \n");
-			button_packet[0] = b&0x0F | ((c<<4)&0xF0);
-			///tuxctl_ldisc_data_callback(button_packet)
-			copy_to_user (to, button_packet, sizeof(uint8_t));
-			return 0;
 		case(MTCP_RESET):
-			inittux(tty); 
+			//inittux(tty); 
 			printk("reset \n");
-			return 0;
+			return;
 		case(MTCP_ERROR):
+			//inittux(tty); 
 			//call reset
 			printk("MTC error\n");
-			return 0;
-
+			return;
+		case(MTCP_BIOC_EVENT):
+			printk("bioc event time \n");
+			button_packet[0] = b;
+			button_packet[1] = c;
+			return;
 		default:
 			printk("default shit \n");
-		
-	
-	
+			return;
 	}
 }
 
 int inittux(struct tty_struct* tty)
 {
-	char init_bioc[1], init_led[1];
+	char init_bic = MTCP_BIOC_ON;
+	char init_led = MTCP_LED_USR;
 	
-	init_bioc[0] = MTCP_BIOC_ON;
-	init_led[0] = MTCP_LED_USR;
-	
-	tuxctl_ldisc_put(tty, init_bioc, 1);
-	tuxctl_ldisc_put(tty, init_led,  1);
+	tuxctl_ldisc_put(tty, &init_bic, 1);
+	tuxctl_ldisc_put(tty, &init_led, 1);
+	printk("everything has initiated");
+	return 0;
 }
 int set_led(struct tty_struct* tty, unsigned long arg)
 {
@@ -129,7 +126,21 @@ int set_led(struct tty_struct* tty, unsigned long arg)
 
 return 0;
 }
+int set_buttons(struct tty_struct* tty, unsigned long arg)
+{
+	static uint8_t button[1];
+	unsigned long* to = (unsigned long *) arg;
+	if (to = NULL)
+		return -EINVAL;
+	button[0]= button_packet[0]&0x0F | ((button_packet[1]<<4)&0xF0);
+	printk("%d",button[0]);
+	printk("should have printed your packet");
+	copy_to_user (to, button, 1);
+	
+		
+	return 0;
 
+}
 unsigned long hexdriver(unsigned long val, unsigned long dec)
 {
 	if(!dec)
@@ -235,12 +246,16 @@ tuxctl_ioctl (struct tty_struct* tty, struct file* file,
 	case TUX_INIT:
 		printk("Init");
 		inittux(tty); 
+		printk("Init finished");
+		return;
 	case TUX_BUTTONS:
-		//set_buttons(tty, arg); //2-3 lines.
-		printk("buttons");
+		printk("|");
+		set_buttons(tty, arg); //2-3 lines.
+		return;
 	case TUX_SET_LED:
-		set_led(tty,0x03FDABCD);
 		printk("leds");
+		set_led(tty,arg);
+		return;
 	default:
 	    return -EINVAL;
     }

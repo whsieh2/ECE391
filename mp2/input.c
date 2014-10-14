@@ -58,10 +58,10 @@
 #include "module/tuxctl-ioctl.h"
 
 /* set to 1 and compile this file by itself to test functionality */
-#define TEST_INPUT_DRIVER 0
+#define TEST_INPUT_DRIVER 1
 
 /* set to 1 to use tux controller; otherwise, uses keyboard input */
-#define USE_TUX_CONTROLLER 0
+#define USE_TUX_CONTROLLER 1
 
 
 /* stores original terminal settings */
@@ -81,20 +81,16 @@ static int fd;
  *   SIDE EFFECTS: changes terminal settings on stdin; prints an error
  *                 message on failure
  */
-void init_tux()
-{
-	fd = open("/dev/ttyS0", O_RDWR | O_NOCTTY);
-	int ldisc_num = N_MOUSE;
-	ioctl(fd, TIOCSETD, &ldisc_num);
-	ioctl(fd, TUX_INIT);
-	ioctl(fd, TUX_BUTTONS, 0x00000000);
-	//ioctl(fd, TUX_SET_LED, 0x03FDABCD);//0xF1FF09AF);// 0x03FDABCD);
-} 
+
 int
 init_input ()
 {
     struct termios tio_new;
-	//init_tux();
+
+	
+	//ioctl(fd, TUX_BUTTONS, 0x00000000);
+	//ioctl(fd, TUX_SET_LED, 0x03FDABCD);//0xF1FF09AF);// 0x03FDABCD);
+	
 	/**/
     /*
      * Set non-blocking mode so that stdin can be read without blocking
@@ -112,7 +108,7 @@ init_input ()
 	perror ("tcgetattr to read stdin terminal settings");
 	return -1;
     }
-
+	
     /*
      * Turn off canonical (line-buffered) mode and echoing of keystrokes
      * to the monitor.  Set minimal character and timing parameters so as
@@ -178,6 +174,7 @@ typed_a_char (char c)
  *   RETURN VALUE: command issued by the input controller
  *   SIDE EFFECTS: drains any keyboard input
  */
+
 cmd_t 
 get_command ()
 {
@@ -273,6 +270,7 @@ get_command ()
 	}
 #else /* USE_TUX_CONTROLLER */
 	/* Tux controller mode; still need to support typed commands. */
+	
 	if (valid_typing (ch)) {
 	    typed_a_char (ch);
 	} else if (10 == ch || 13 == ch) {
@@ -280,7 +278,7 @@ get_command ()
 	}
 #endif /* USE_TUX_CONTROLLER */
     }
-
+	
     /*
      * Once a direction is pushed, that command remains active
      * until a turn is taken.
@@ -290,7 +288,57 @@ get_command ()
     }
     return pushed;
 }
-
+cmd_t
+get_tux_command()
+ {
+	printf("this happens");
+	int button_pressed;
+	static cmd_t command = CMD_NONE;
+	cmd_t pushed = CMD_NONE;
+	ioctl(fd, TUX_BUTTONS, &button_pressed); //b,a
+	switch(button_pressed)
+		{
+			case(0x80):
+				printf("right");
+				pushed = CMD_RIGHT;
+				break;
+			case(0x40):
+				printf("down");
+				pushed = CMD_DOWN;
+				break;
+			case(0x20):
+				printf("left");
+				pushed = CMD_LEFT;
+				break;
+			case(0x10):
+				printf("up");
+				pushed = CMD_UP;
+				break;
+			case(0x08):
+				printf("C");
+				pushed = CMD_MOVE_RIGHT;
+				break;
+			case(0x04):
+				printf("B");
+				pushed = CMD_ENTER;
+				break;
+			case(0x02):
+				printf("A");
+				pushed = CMD_LEFT;
+				break;
+			case(0x01):
+				printf("START");
+				pushed = CMD_QUIT;
+				break;
+			default:
+				printf(".");
+				break;
+		}
+	if (pushed == CMD_NONE) {
+        command = CMD_NONE;
+    }
+	return pushed;
+ }
 /* 
  * shutdown_input
  *   DESCRIPTION: Cleans up state associated with input control.  Restores
@@ -350,10 +398,10 @@ display_time_on_tux (int num_seconds)
 int
 main ()
 {
-	init_tux();
-	printf("init in input main");
-	display_time_on_tux (83);
-	printf("time!");
+	fd = open("/dev/ttyS0", O_RDWR | O_NOCTTY);
+	int ldisc_num = N_MOUSE;
+	ioctl(fd, TIOCSETD, &ldisc_num);
+	ioctl(fd, TUX_INIT, 0);
     cmd_t last_cmd = CMD_NONE;
     cmd_t cmd;
     static const char* const cmd_name[NUM_COMMANDS] = {

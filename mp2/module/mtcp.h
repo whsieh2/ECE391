@@ -343,7 +343,7 @@
 ;		Byte 1 - reserved
 ;		Byte 2 - reserved
 ;
-; MTCP_BIOC_EVT	
+; MTCP_BIOC_EVENT	
 ;	Generated when the Button Interrupt-on-change mode is enabled and 
 ;	a button is either pressed or released.
 ;
