@@ -44,31 +44,26 @@ unsigned long hexdriver(unsigned long val, unsigned long dec);
 void tuxctl_handle_packet (struct tty_struct* tty, unsigned char* packet)
 {
     unsigned a, b, c;
-
     a = packet[0]; /* Avoid printk() sign extending the 8-bit */
     b = packet[1]; /* values when printing them. */
     c = packet[2];
 
-    printk("packet : %x %x %x\n", a, b, c); 
-	
 	switch(a)
 	{
 		case(MTCP_RESET):
-			//inittux(tty); 
-			printk("reset \n");
+			inittux(tty); 
+
 			return;
 		case(MTCP_ERROR):
 			//inittux(tty); 
 			//call reset
-			printk("MTC error\n");
+			//printk("MTC error\n");
 			return;
 		case(MTCP_BIOC_EVENT):
-			printk("bioc event time \n");
 			button_packet[0] = b;
 			button_packet[1] = c;
 			return;
 		default:
-			printk("default shit \n");
 			return;
 	}
 }
@@ -80,66 +75,70 @@ int inittux(struct tty_struct* tty)
 	
 	tuxctl_ldisc_put(tty, &init_bic, 1);
 	tuxctl_ldisc_put(tty, &init_led, 1);
-	printk("everything has initiated");
+	
 	return 0;
 }
 int set_led(struct tty_struct* tty, unsigned long arg)
 {
-	printk("arg = %lx\n", arg);
+	unsigned long init0, init1, init2, init3;
 	unsigned long argVal, led_temp, dec_temp,bufCount;
 	uint8_t buffer[6], argValShifted;
+	//printk("LED arg = %lx\n", arg);
+
+	
 	buffer[0] = MTCP_LED_SET;
 	
 	led_temp = (arg & 0x000F0000); //Figure out which led's are turned on
 	led_temp = led_temp >>16;
-	printk("arg = %lx \n", led_temp);
 	bufCount = 0;
 	buffer[1] = led_temp;
 	argVal = arg;
-	
-	unsigned long init0, init1, init2, init3;
-	
-	init0 = arg & 0x0000000F;
-	dec_temp = (arg>>24)&0x01;
-	argValShifted = (hexdriver(init0,dec_temp));
-	buffer[2] = argValShifted&0xFF;;
-	
-	init1 = (arg>>4) & 0x0000000F;
-	dec_temp = (arg>>25)&0x01;
-	argValShifted = (hexdriver(init1,dec_temp));
-	buffer[3] = argValShifted&0xFF;;
-	
-	
-	init2 = (arg>>8) & 0x0000000F;
-	dec_temp = (arg>>26)&0x01;
-	argValShifted = (hexdriver(init2,dec_temp));
-	buffer[4] = argValShifted&0xFF;;
-	
-	
-	init3 = (arg>>12) & 0x0000000F;
-	dec_temp = (arg>>27)&0x01;
-	argValShifted = (hexdriver(init3,dec_temp));
-	buffer[5] = argValShifted&0xFF;
 
-	
-	tuxctl_ldisc_put(tty, buffer, 6);
+	if(led_temp&0x01)
+	{
+		bufCount++;
+		init0 = arg & 0x0000000F;
+		dec_temp = (arg>>24)&0x01;
+		argValShifted = (hexdriver(init0,dec_temp));
+		buffer[2] = argValShifted&0xFF;
+	}
+	if(led_temp&0x02)
+	{	
+		bufCount++;
+		init1 = (arg>>4) & 0x0000000F;
+		dec_temp = (arg>>25)&0x01;
+		argValShifted = (hexdriver(init1,dec_temp));
+		buffer[3] = argValShifted&0xFF;;
+	}
+	if(led_temp&0x04)
+	{
+		bufCount++;
+		init2 = (arg>>8) & 0x0000000F;
+		dec_temp = (arg>>26)&0x01;
+		argValShifted = (hexdriver(init2,dec_temp));
+		buffer[4] = argValShifted&0xFF;;
+	}
+	if(led_temp&0x08)
+	{
+		bufCount++;
+		init3 = (arg>>12) & 0x0000000F;
+		dec_temp = (arg>>27)&0x01;
+		argValShifted = (hexdriver(init3,dec_temp));
+		buffer[5] = argValShifted&0xFF;
+	}
+	tuxctl_ldisc_put(tty, buffer, 2+bufCount);
 
 return 0;
 }
 int set_buttons(struct tty_struct* tty, unsigned long arg)
 {
-	static uint8_t button[1];
+	uint8_t button[1];
 	unsigned long* to = (unsigned long *) arg;
-	if (to = NULL)
+	if (to == (NULL))
 		return -EINVAL;
-	button[0]= button_packet[0]&0x0F | ((button_packet[1]<<4)&0xF0);
-	printk("%d",button[0]);
-	printk("should have printed your packet");
+	button[0]= ((button_packet[0]&0x0F) | ((button_packet[1]<<4)&0xF0));
 	copy_to_user (to, button, 1);
-	
-		
 	return 0;
-
 }
 unsigned long hexdriver(unsigned long val, unsigned long dec)
 {
@@ -244,18 +243,11 @@ tuxctl_ioctl (struct tty_struct* tty, struct file* file,
 {
     switch (cmd) {
 	case TUX_INIT:
-		printk("Init");
-		inittux(tty); 
-		printk("Init finished");
-		return;
+		return inittux(tty); 
 	case TUX_BUTTONS:
-		printk("|");
-		set_buttons(tty, arg); //2-3 lines.
-		return;
+		return set_buttons(tty, arg); 
 	case TUX_SET_LED:
-		printk("leds");
-		set_led(tty,arg);
-		return;
+		return set_led(tty,arg) ;
 	default:
 	    return -EINVAL;
     }

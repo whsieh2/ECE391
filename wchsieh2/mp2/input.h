@@ -51,7 +51,7 @@ typedef enum {
 
 /* Initialize the input device. */
 extern int init_input ();
-
+/* Read a command from the TUX */
 extern cmd_t get_tux_command();
 /* Read a command from the input device. */
 extern cmd_t get_command ();
