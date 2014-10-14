@@ -208,7 +208,7 @@ game_loop ()
 
     struct timeval cur_time; /* current time (during tick)      */
     cmd_t cmd;               /* command issued by input control */
-	cmd_t cmdKey;			 /* keyboard command input
+	cmd_t cmdKey;			 /* keyboard command input*/
     int32_t enter_room;      /* player has changed rooms        */
 
     /* Record the starting time--assume success. */
