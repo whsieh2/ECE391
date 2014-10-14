@@ -938,7 +938,7 @@ set_palette (photo_t* p)
  /* Start writing at color 64. */
     OUTB (0x03C8, 0x40);
 
-    /* Write all 64 colors from array. */
+    /* Write all 192 colors from array. */
     REP_OUTSB (0x03C9, p->palette, 192 * 3);
 
 }

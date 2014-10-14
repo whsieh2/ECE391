@@ -75,23 +75,19 @@ struct image_t {
     photo_header_t hdr;			/* defines height and width */
     uint8_t*       img;                 /* pixel data               */
 };
-/*struct octree_t {
-	unsigned pixelCount;
-	uint16_t color;
-	uint16_t rgb[3];
-};*/
+
 
 
 /* file-scope variables */
-
+static const room_t* cur_room = NULL; 
 /* 
  * The room currently shown on the screen.  This value is not known to 
  * the mode X code, but is needed when filling buffers in callbacks from 
  * that code (fill_horiz_buffer/fill_vert_buffer).  The value is set 
  * by calling prep_room.
  */
-static const room_t* cur_room = NULL; 
-static int cmpfunc (void const *elem1, void const *elem2);
+/* local function declaration*/
+static int cmpfunc (void const *elem1, void const *elem2); //used to compare elements of our array.
 
 
 /* 
@@ -427,11 +423,13 @@ read_photo (const char* fname)
     uint16_t y;		/* index over image rows    */
     uint16_t pixel;	/* one pixel from the file  */
 	
-	int index;
-	uint16_t i, red, green, blue, redPalette, greenPalette, bluePalette;
-	octree_t levelFour[4096];
-	octree_t levelTwo[64];
-	for (i=0;i<4096;i++)
+	int index;	//Where in the array to store the pixel information (color)
+	uint16_t i, red, green, blue, redPalette, greenPalette, bluePalette; //Color related variables.
+	
+	octree_t levelFour[4096];	//creates our levelFour octree node.
+	octree_t levelTwo[64];		//creates our levelTwo octree node.
+	//clears both arrays
+	for (i=0;i<4096;i++)	
 	{
 		levelFour[i].rgb[0] = 0;
 		levelFour[i].rgb[1] = 0;
@@ -510,15 +508,15 @@ read_photo (const char* fname)
 	
 		index = (((pixel>>4)&0xF00) | ((pixel>>3)&0x0F0) | (((pixel>>1)&0x00F))); //3 groups of 4 bit RGB values.
 		levelFour[index].rgb[0] += ((pixel>>10)&0x03E); //all bits of rgb (zero extended on the left).
-		levelFour[index].rgb[1] += ((pixel>>5)&0x003F);
-		levelFour[index].rgb[2] += ((pixel<<1)&0x03E);
-		levelFour[index].color = pixel;
-		levelFour[index].pixelCount++;
+		levelFour[index].rgb[1] += ((pixel>>5)&0x003F);	//ex: RRRRR0, GGGGGGG, BBBBB0
+		levelFour[index].rgb[2] += ((pixel<<1)&0x03E);	//Adds all the similar colors to the node.
+		levelFour[index].color = pixel;		//keeps track of the pixel color information for later use ;)
+		levelFour[index].pixelCount++;		//Gets the pixel count for the specific color type. Used for averages later.
 		
 	}
     }
 	
-	
+	//
 	makePalette(p,levelFour, levelTwo);
 	
 	fseek(in, sizeof(p->hdr), SEEK_SET); //moves the file past header to go to image file.
@@ -543,7 +541,7 @@ read_photo (const char* fname)
 		return NULL;
 
 	    }
-		
+	//Grabs each color of the pixel and compares them to the palette and places that color into the image file for levelTwo first.
 	red = (pixel>>11)&0x01F; 
 	green = (pixel>>5)&0x03F;
 	blue = (pixel)&0x01F;
@@ -558,6 +556,7 @@ read_photo (const char* fname)
 			 
 		}
 	}
+		//Grabs each color of the pixel and compares them to the palette and places that color into the image file for levelFour.
 	for (i=0; i<128; i++)
 	{
 		redPalette = p->palette[i][0];
@@ -568,21 +567,31 @@ read_photo (const char* fname)
 			p->img[p->hdr.width * y + x] = i +64;
 		}
 	}
-	
-		
 	}
     }
     /* All done.  Return success. */
     (void)fclose (in);
     return p;
 }
+/* 
+ * makePalette
+ *   DESCRIPTION: sorts levelFour in descending order of frequency (pixelCount). First node ([0]) has
+				the highest pixelCount. Gets average of top 128 and places them in palette. Rest of levelFour is 
+				put into levelTwo. And then levelTwo's averages are put them into the rest of palette's space.
+ *   INPUTS: pointer to the photo_t struct, pointer to levelFour and levelTwo octree nodes.
+ *   OUTPUTS: none
+ *   RETURN VALUE: pointer to newly allocated photo on success, or NULL
+ *                 on failure
+ *   SIDE EFFECTS: dynamically allocates memory for the photo
+ */
 void makePalette(photo_t* p, octree_t* levelFour, octree_t* levelTwo)
 {
-	int a, b, c;
-	int pixel_count;
-	int index;
-	uint16_t pixelColor;
+	int a, b, c;	//iterator variables.
+	int pixel_count;	//demoninator of each color for average calculations.
+	int index;		//maps the octree.
+	uint16_t pixelColor;	//Color information.
 	
+	//sorts levelFour's notes in descending order, highest frequency in first node and so on.
 	qsort(levelFour, 4096, sizeof(octree_t), cmpfunc);
 	for (a = 0; a<128; a++)
 	{
@@ -591,10 +600,12 @@ void makePalette(photo_t* p, octree_t* levelFour, octree_t* levelTwo)
 		{
 			for(b= 0; b<3; b++)
 			{
-				p->palette[a][b] = (levelFour[a].rgb[b]) / pixel_count;//+64
+				p->palette[a][b] = (levelFour[a].rgb[b]) / pixel_count;//Puts average of top 128 pixelCount levelFours into the palette.
 			}
 		}
 	}
+	
+	//Takes the remaining colors and puts them into the levelTwo nodes.
 	for (c = 128; c<4096; c++)
 	{
 		pixelColor = levelFour[c].color;
@@ -605,6 +616,7 @@ void makePalette(photo_t* p, octree_t* levelFour, octree_t* levelTwo)
 		levelTwo[index].color = pixelColor;
 		levelTwo[index].pixelCount++;
 	}
+	//Takes averages of the 64 levelTwo nodes and puts them into the remaining palette spaces.
 	for (a = 0; a<64; a++)
 	{
 		pixel_count = levelTwo[a].pixelCount;
@@ -619,6 +631,14 @@ void makePalette(photo_t* p, octree_t* levelFour, octree_t* levelTwo)
 	
 
 }
+/* 
+ * cmpfunc
+ *   DESCRIPTION: sorts levelFour in descending order of frequency (pixelCount). Compares the seconds element to the first.
+ *   OUTPUTS: none
+ *   RETURN VALUE: pointer to newly allocated photo on success, or NULL
+ *                 on failure
+ *   SIDE EFFECTS: dynamically allocates memory for the photo
+ */
 int 
 cmpfunc (void const *elem1, void const *elem2)
 {
