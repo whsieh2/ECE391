@@ -144,10 +144,10 @@ static void move_photo_up (void);
 static void redraw_room (void);
 static void* status_thread (void* ignore);
 static int time_is_after (struct timeval* t1, struct timeval* t2);
-//void create_status_bar(const char* room, const char* status, const char* typed);
 static void check_tux_state();
 /* file-scope variables */
-		 /* keyboard command input*/
+
+/* keyboard command input*/
 /* 
  * The variables below are used to keep track of the status message helper
  * thread, with Posix thread id recorded in status_thread_id.  
@@ -173,8 +173,10 @@ static pthread_cond_t controller_cv = PTHREAD_COND_INITIALIZER;
 static game_info_t game_info; /* game information */
 
 static int32_t enter_room;      /* player has changed rooms        */
-int previous_time;
-volatile int terminate_game=0;
+int previous_time;				/*keeps track of time so reset won't change it*/
+volatile int terminate_game=0;	/*lets the drive know to end the game*/
+
+/* Static variables for commands read by control devices. Defaults it to doing nothing. */
 static cmd_t tux_cmd = CMD_NONE;
 static cmd_t cmdKey = CMD_NONE;	
 
@@ -194,7 +196,15 @@ cancel_status_thread (void* ignore)
 {
     (void)pthread_cancel (status_thread_id);
 }
-
+/* 
+ * cancel_tux_thread
+ *   DESCRIPTION: Terminates the tux control helper thread.  Used as
+ *                a cleanup method to ensure proper shutdown.
+ *   INPUTS: none (ignored)
+ *   OUTPUTS: none
+ *   RETURN VALUE: none
+ *   SIDE EFFECTS: none
+ */
 static void
 cancel_tux_thread (void* ignore)
 {
@@ -305,19 +315,21 @@ game_loop ()
 	 * Note that typed commands that move objects may cause the room
 	 * to be redrawn.
 	 */
+	 
+	 /*calculates the clock and keeps track of the time.*/
 	if (cur_time.tv_sec - start_time.tv_sec != previous_time)
 	{
 		previous_time = cur_time.tv_sec - start_time.tv_sec;
 		display_time_on_tux (previous_time);
 	
 	}
-	/*calculates the clock*/
+	//set tux command
 	tux_cmd = CMD_NONE;
 	check_tux_state();
 	if(terminate_game)
 		return GAME_QUIT;
 	
-	
+	//Manipulates the screen according to the keys pressed on the keyboard.
 	cmdKey = CMD_NONE;
 	cmdKey = get_command ();
 	switch (cmdKey) {
@@ -710,7 +722,14 @@ status_thread (void* ignore)
     return NULL;
 }
 
-
+/* 
+ * tux_thread
+ *   DESCRIPTION: Maps tux buttons to game actions. 
+ *   INPUTS: none (ignored)
+ *   OUTPUTS: none
+ *   RETURN VALUE: NULL
+ *   SIDE EFFECTS: Changes the actions of game based on input. Can change game room value.
+ */
 static void
 tux_thread(void *ignore)
 {	
@@ -746,7 +765,7 @@ tux_thread(void *ignore)
 		}	
 		(void)pthread_mutex_unlock(&controller_lock);
 	}
-	return NULL;
+	return 0;
 }
 /* 
  * time_is_after 
@@ -797,7 +816,14 @@ show_status (const char* s)
     /* msg_lock critical section ends here. */
     (void)pthread_mutex_unlock (&msg_lock);
 }
-
+/* 
+ * check_tux_state
+ *   DESCRIPTION: Gets the command/button from the tux control.
+ *   INPUTS: none (ignored)
+ *   OUTPUTS: none
+ *   RETURN VALUE: NULL
+ *   SIDE EFFECTS: changes tux_cmd and starts tux thread.
+ */
 static void 
 check_tux_state()
 {

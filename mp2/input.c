@@ -64,11 +64,11 @@
 #define USE_TUX_CONTROLLER 1
 
 
-
+/*
 static struct termios tio_orig;	/* stores original terminal settings */
 static int fd;
-volatile int prev_but;
-volatile int button_pressed;
+volatile int prev_but;		//Has the previous button information so the TUX button will not spam.
+volatile int button_pressed;	//Contains the current button information.
 
 
 /* 
@@ -88,10 +88,10 @@ int
 init_input ()
 {
     struct termios tio_new;
-	fd = open("/dev/ttyS0", O_RDWR | O_NOCTTY);
+	fd = open("/dev/ttyS0", O_RDWR | O_NOCTTY);	//Points to the correct file! 
 	int ldisc_num = N_MOUSE;
-	ioctl(fd, TIOCSETD, &ldisc_num);
-	ioctl(fd, TUX_INIT, 0);
+	ioctl(fd, TIOCSETD, &ldisc_num);	
+	ioctl(fd, TUX_INIT, 0);	
 	
 	
 	/**/
@@ -181,11 +181,10 @@ typed_a_char (char c)
 cmd_t 
 get_command ()
 {
-	    static cmd_t command = CMD_NONE;
+	static cmd_t command = CMD_NONE;
     cmd_t pushed = CMD_NONE;
-//#if (USE_TUX_CONTROLLER == 0) /* use keyboard control with arrow keys */
     static int state = 0;             /* small FSM for arrow keys */
-//#endif
+
 
     int ch;
 
@@ -272,16 +271,7 @@ get_command ()
 		}
 		break;
 	}
-//#else /* USE_TUX_CONTROLLER */
-	/* Tux controller mode; still need to support typed commands. */
-	
-	/*if (valid_typing (ch)) {
-	    typed_a_char (ch);
-	} else if (10 == ch || 13 == ch) {
-	    pushed = CMD_TYPED;
-	}
-//#endif /* USE_TUX_CONTROLLER */
-    }
+}
     /*
      * Once a direction is pushed, that command remains active
      * until a turn is taken.
@@ -291,45 +281,57 @@ get_command ()
     }
     return pushed;
 }
+/* 
+ * get_tux_command()
+ *   DESCRIPTION: Reads a command from the tux controller.  As some
+ *                controllers provide only absolute input (e.g., go
+ *                right), the current direction is needed as an input
+ *                to this routine.
+ *   INPUTS: cur_dir -- current direction of motion
+ *   OUTPUTS: none
+ *   RETURN VALUE: command issued by the input controller
+ *   SIDE EFFECTS: drains any tux controller input
+ */
 cmd_t
 get_tux_command()
 {
-	prev_but = button_pressed;
-	cmd_t pushed = CMD_NONE;
-	ioctl(fd, TUX_BUTTONS, &button_pressed); //b,a
-	switch(button_pressed)
+	prev_but = button_pressed; //set's previous button because button_pressed changes its value.
+	cmd_t pushed = CMD_NONE;	//Defaults actions to none.
+	ioctl(fd, TUX_BUTTONS, &button_pressed); //button_pressed is packets CB where the unused bits are thrown away.
+	switch(button_pressed)		
 		{
-			case(0x7F):
+		//self explanatory matching of packet information and commands.
+			case(0x7F): //<-
 				pushed = CMD_RIGHT;
 				break;
-			case(0xBF):
+			case(0xBF): // \/
 				pushed = CMD_DOWN;
 				break;
-			case(0xDF):
+			case(0xDF): //<-
 				pushed = CMD_LEFT;
 				break;
-			case(0xEF):
+			case(0xEF):// /\
 				pushed = CMD_UP;
 				break;
-			case(0xF7):
-				if (prev_but == button_pressed)
-					pushed = CMD_NONE;
+			case(0xF7)://(>
+				if (prev_but == button_pressed)		//If the previous button is the same as the new button, do not spam the command. 
+					pushed = CMD_NONE;				//We want the button to read as a 1 action when held down. When let go, the button pressed is none!
 				else
 					pushed = CMD_MOVE_RIGHT;
 				break;
-			case(0xFB):
+			case(0xFB):// ENTER
 				if (prev_but == button_pressed)
 					pushed = CMD_NONE;
 				else
 					pushed = CMD_ENTER;
 				break;
-			case(0xFD):
+			case(0xFD):// <)
 				if (prev_but == button_pressed)
 					pushed = CMD_NONE;
 				else
 					pushed = CMD_MOVE_LEFT;
 				break;
-			case(0xFE):
+			case(0xFE):	//bye bye time. aka. GAME OVER.
 				pushed = CMD_QUIT;
 				break;
 			default:
@@ -373,28 +375,27 @@ display_time_on_tux (int num_seconds)
 	unsigned long arg, led3, led2, led1, led0;
 	int min, sec;
 	printf("%d", num_seconds);
-	arg = 0xF4F00000;	//Set up the base of the arg for the time.
-	min = num_seconds/60;
-	sec = num_seconds%60;
-	if(min<=9)
+	arg = 0xF4F00000;	//Set up the base of the arg for the time. First and thirds 4 bits don't mean anything. the 4 signifies the decimal point in the middle.
+	min = num_seconds/60;	//total number of minutes. 
+	sec = num_seconds%60;	//total number of seconds
+	if(min<=9)				//Don't write to the most significant LED.
 	{	
-		arg = 0xF4F70000;
+		arg = 0xF4F70000;	
 	}
 	else
 	{
-		arg = 0xF4FF0000;
+		arg = 0xF4FF0000;	//Turns all LED's on. 
 	}
-	led3 = min/10;
-	led2 = min%10;
-	led1 = sec/10;
-	led0 = sec%10;
-	arg = arg + (led3<<12) + (led2<<8) + (led1<<4) + (led0);
-	printf("%lx",arg);
-	ioctl(fd, TUX_SET_LED, arg);
+	led3 = min/10;			//Ten's digit of minutes
+	led2 = min%10;			//single's digits of minutes
+	led1 = sec/10;			//ten's digit of seconds
+	led0 = sec%10;			//single's digit of seconds.
+	arg = arg + (led3<<12) + (led2<<8) + (led1<<4) + (led0);	//Bitshifting and masking to get the correct LED value for the arg sent to TUX_SET_LED
+	ioctl(fd, TUX_SET_LED, arg);	//calls TUX_SET_LED in the ioctl that will show the time.
 	
 }
 
-
+//Unused in adventure. But very helpful during the debugging process of input. :D
 #if (TEST_INPUT_DRIVER == 1)
 int
 main ()

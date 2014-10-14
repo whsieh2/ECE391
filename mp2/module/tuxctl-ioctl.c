@@ -28,15 +28,17 @@
 
 #define debug(str, ...) \
 	printk(KERN_DEBUG "%s: " str, __FUNCTION__, ## __VA_ARGS__)
+/* local function declarations*/
 int inittux(struct tty_struct* tty);
 int set_led(struct tty_struct* tty, unsigned long arg);
 int set_buttons(struct tty_struct* tty, unsigned long arg);
 int reset_tux(struct tty_struct* tty);
-uint8_t button_packet[2];
-uint8_t button[1];
 unsigned long hexdriver(unsigned long val, unsigned long dec);
-int sig;
-unsigned long LED;
+/*location file scope variables*/
+uint8_t button_packet[2]; //handles the b and c packets.
+uint8_t button[1];	//Used to handle button packets and condenses the two into 1 byte.
+int sig;		//sig to prevent cmd spamming.
+unsigned long LED; //Holds the LED value so we can correctly output the clock despite resets.
 /************************ Protocol Implementation *************************/
 
 /* tuxctl_handle_packet()
@@ -44,13 +46,23 @@ unsigned long LED;
  * tuxctl-ld.c. It calls this function, so all warnings there apply 
  * here as well.
  */
+ /* 
+ * tuxctl_handle_packet()
+ *   DESCRIPTION: Read the header for tuxctl_ldisc_data_callback() in 
+ * tuxctl-ld.c. It calls this function, so all warnings there apply. Recieves signals from device.
+ * here as well. Opcode sent in first packet.
+ *   OUTPUTS: none
+ *   RETURN VALUE: none
+ *   SIDE EFFECTS: sets up packets for other functions to use, or will call other functions.
+ */
 void tuxctl_handle_packet (struct tty_struct* tty, unsigned char* packet)
 {
     unsigned a, b, c;
     a = packet[0]; /* Avoid printk() sign extending the 8-bit */
     b = packet[1]; /* values when printing them. */
     c = packet[2];
-
+	
+	//determines what the opcode is trying to do
 	switch(a)
 	{
 		case(MTCP_ACK):
@@ -60,9 +72,7 @@ void tuxctl_handle_packet (struct tty_struct* tty, unsigned char* packet)
 			reset_tux(tty); 
 			return;
 		case(MTCP_ERROR):
-			//inittux(tty); 
-			//call reset
-			//printk("MTC error\n");
+			
 			return;
 		case(MTCP_BIOC_EVENT):
 			button_packet[0] = b;
@@ -72,22 +82,38 @@ void tuxctl_handle_packet (struct tty_struct* tty, unsigned char* packet)
 			return;
 	}
 }
+ /* 
+ * reset_tux
+ *   DESCRIPTION: called by RESET procotcol and will initiate MTCP_BIOC_ON to turn on button receiving, MTCP_LED_USR to set LED in user mode.
+	INPUTS: tty
+ *   OUTPUTS: none
+ *   RETURN VALUE: -EINVAL to do nothing and 0 to show LED.
+ *   SIDE EFFECTS: none
+ */
 int reset_tux(struct tty_struct* tty)
 {
 	char init_bic = MTCP_BIOC_ON;
 	char init_led = MTCP_LED_USR;
 	
-	tuxctl_ldisc_put(tty, &init_bic, 1);
+	tuxctl_ldisc_put(tty, &init_bic, 1);	//sends the above two signals to the tux controller.
 	tuxctl_ldisc_put(tty, &init_led, 1);
-	if (sig == 1)
-		return -EINVAL;
-	else
+	if (sig == 1)	//Don't do anything if sig is 1, because someone is obviously spamming a button.
+		return -EINVAL;	
+	else//show our correct LED.
 	{
 		sig = 1;
 		set_led(tty,LED);	
 		return 0;
 	}
 }
+/* 
+ * inittux
+ *   DESCRIPTION: initializes the game!
+ *   INPUTS:tty struct
+ *   OUTPUTS: none
+ *   RETURN VALUE: 0.
+ *   SIDE EFFECTS: initializes the game. Similar functionality to reset, only we don't worry about sig conditions.
+ */
 int inittux(struct tty_struct* tty)
 {
 	char init_bic = MTCP_BIOC_ON;
@@ -95,31 +121,39 @@ int inittux(struct tty_struct* tty)
 	sig = 1;
 	tuxctl_ldisc_put(tty, &init_bic, 1);
 	tuxctl_ldisc_put(tty, &init_led, 1);
-	LED = 0XF0FF0000;
+	LED = 0XF0FF0000; //Turns off all LEDs.
 	
 	return 0;
 }
+/* 
+ * set_led
+ *   DESCRIPTION: creates the led signal that will display the right thing!
+ *   INPUTS:tty, and LED packet in arg.
+ *   OUTPUTS: none
+ *   RETURN VALUE: 0.
+ *   SIDE EFFECTS: updates currently LED display and global..
+ */
 int set_led(struct tty_struct* tty, unsigned long arg)
 {
 	unsigned long init0, init1, init2, init3;
 	unsigned long argVal, led_temp, dec_temp,bufCount;
 	uint8_t buffer[6], argValShifted;
 	
-	buffer[0] = MTCP_LED_SET;
+	buffer[0] = MTCP_LED_SET;	//Set our LED to the following.
 	
 	led_temp = (arg & 0x000F0000); //Figure out which led's are turned on
-	led_temp = led_temp >>16;
-	bufCount = 0;
-	buffer[1] = led_temp;
-	argVal = arg;
+	led_temp = led_temp >>16;	//Led_temp has which leds are turned on
+	bufCount = 0;	//start at 0.
+	buffer[1] = led_temp;	//which LED's are turned on.
+	argVal = arg;	//holds argument, or LED information.
 
-	if(led_temp&0x01)
+	if(led_temp&0x01)	//See if first led is turned on
 	{
-		bufCount++;
-		init0 = arg & 0x0000000F;
-		dec_temp = (arg>>24)&0x01;
-		argValShifted = (hexdriver(init0,dec_temp));
-		buffer[2] = argValShifted&0xFF;
+		bufCount++;		//incr buf count.
+		init0 = arg & 0x0000000F;	//finds value of what to show
+		dec_temp = (arg>>24)&0x01;	//if the corresponding decimal point is on
+		argValShifted = (hexdriver(init0,dec_temp));	//maps the value of what to display to something the led can interpret.
+		buffer[2] = argValShifted&0xFF;	//puts led readable value into buffer.
 	}
 	if(led_temp&0x02)
 	{	
@@ -145,24 +179,41 @@ int set_led(struct tty_struct* tty, unsigned long arg)
 		argValShifted = (hexdriver(init3,dec_temp));
 		buffer[5] = argValShifted&0xFF;
 	}
-	if(sig == 1)
+	if(sig == 1)	
 		return 0;
 	else
 		sig =1;
-		tuxctl_ldisc_put(tty, buffer, 2+bufCount);
-		LED= arg;
+		tuxctl_ldisc_put(tty, buffer, 2+bufCount);	//sends buffer to device for led to display.
+		LED= arg; //set global variable.
 	return 0;
 }
+/* 
+ * set_button
+ *   DESCRIPTION: creates button packet and sends to be interpretted.
+ *   INPUTS:tty struct, arg
+ *   OUTPUTS: none
+ *   RETURN VALUE: 0.
+ *   SIDE EFFECTS: screen will abide by the controls.
+ */
 int set_buttons(struct tty_struct* tty, unsigned long arg)
 {
 	uint8_t button[1];
 	unsigned long* to = (unsigned long *) arg;
 	if (to == (NULL))
-		return -EINVAL;
+		return -EINVA;
 	button[0]= ((button_packet[0]&0x0F) | ((button_packet[1]<<4)&0xF0));
-	copy_to_user (to, button, 1);
+	
+	copy_to_user (to, button, 1); //sends to the user
 	return 0;
 }
+/* 
+ * inittux
+ *   DESCRIPTION: initializes the game!
+ *   INPUTS:tty struct
+ *   OUTPUTS: none
+ *   RETURN VALUE: 0.
+ *   SIDE EFFECTS: initializes the game. Similar functionality to reset, only we don't worry about sig conditions.
+ */
 unsigned long hexdriver(unsigned long val, unsigned long dec)
 {
 	if(!dec)
@@ -259,16 +310,26 @@ unsigned long hexdriver(unsigned long val, unsigned long dec)
  * ioctls should return immediately with success if their parameters are      *
  * valid.                                                                     *
  *                                                                            *
- ******************************************************************************/
+ ******************************************************************************//* 
+ * tuxctl_ioclt
+ *   DESCRIPTION: implements our IOCTLS for 3 specific commands. Sends commands to the device.
+ *   INPUTS:tty, file, command, arg sociated with command.
+ *   OUTPUTS: none
+ *   RETURN VALUE: function calls, else -EINVAL.
+ *   SIDE EFFECTS: set values to global varaiables.
+ */
 int 
 tuxctl_ioctl (struct tty_struct* tty, struct file* file, 
 	      unsigned cmd, unsigned long arg)
 {
     switch (cmd) {
+	//initializes game.
 	case TUX_INIT:
 		return inittux(tty); 
+	//buttons are going to be interpretted.
 	case TUX_BUTTONS:
 		return set_buttons(tty, arg); 
+	//
 	case TUX_SET_LED:
 		return set_led(tty,arg) ;
 	default:

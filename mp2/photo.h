@@ -51,7 +51,7 @@
 #define MAX_PHOTO_HEIGHT  1024
 #define MAX_OBJECT_WIDTH  160
 #define MAX_OBJECT_HEIGHT 100
-
+//My octree struct. 
 typedef struct octree_t {
 	int pixelCount;
 	int color;
@@ -89,8 +89,9 @@ extern image_t* read_obj_image (const char* fname);
 /* Read room photo from a file into a dynamically allocated structure. */
 extern photo_t* read_photo (const char* fname);
 
+//makes levelTwo and creates palettes from averages of 128 most frequent nodes, and all level 2's.
 extern void makePalette (photo_t* p, octree_t* levelFour, octree_t* levelTwo);
-//extern void makePalette (photo_t* p, void* levelFour, void* levelTwo);
+
 /* 
  * N.B.  I'm aware that Valgrind and similar tools will report the fact that
  * I chose not to bother freeing image data before terminating the program.
