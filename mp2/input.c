@@ -67,7 +67,8 @@
 
 static struct termios tio_orig;	/* stores original terminal settings */
 static int fd;
-int prev_but;
+volatile int prev_but;
+volatile int button_pressed;
 
 
 /* 
@@ -182,9 +183,9 @@ get_command ()
 {
 	    static cmd_t command = CMD_NONE;
     cmd_t pushed = CMD_NONE;
-#if (USE_TUX_CONTROLLER == 0) /* use keyboard control with arrow keys */
+//#if (USE_TUX_CONTROLLER == 0) /* use keyboard control with arrow keys */
     static int state = 0;             /* small FSM for arrow keys */
-#endif
+//#endif
 
     int ch;
 
@@ -195,7 +196,7 @@ get_command ()
 	if (ch == '`')
 	    return CMD_QUIT;
 	
-#if (USE_TUX_CONTROLLER == 0) /* use keyboard control with arrow keys */
+//#if (USE_TUX_CONTROLLER == 0) /* use keyboard control with arrow keys */
 	/*
 	 * Arrow keys deliver the byte sequence 27, 91, and 'A' to 'D';
 	 * we use a small finite state machine to identify them.
@@ -271,15 +272,15 @@ get_command ()
 		}
 		break;
 	}
-#else /* USE_TUX_CONTROLLER */
+//#else /* USE_TUX_CONTROLLER */
 	/* Tux controller mode; still need to support typed commands. */
 	
-	if (valid_typing (ch)) {
+	/*if (valid_typing (ch)) {
 	    typed_a_char (ch);
 	} else if (10 == ch || 13 == ch) {
 	    pushed = CMD_TYPED;
 	}
-#endif /* USE_TUX_CONTROLLER */
+//#endif /* USE_TUX_CONTROLLER */
     }
     /*
      * Once a direction is pushed, that command remains active
@@ -291,10 +292,10 @@ get_command ()
     return pushed;
 }
 cmd_t
-get_tux_command(cmd_t keyboard_cmd)
+get_tux_command()
 {
-	int button_pressed;
-	cmd_t pushed = keyboard_cmd;
+	prev_but = button_pressed;
+	cmd_t pushed = CMD_NONE;
 	ioctl(fd, TUX_BUTTONS, &button_pressed); //b,a
 	switch(button_pressed)
 		{
@@ -311,22 +312,31 @@ get_tux_command(cmd_t keyboard_cmd)
 				pushed = CMD_UP;
 				break;
 			case(0xF7):
-				pushed = CMD_MOVE_RIGHT;
+				if (prev_but == button_pressed)
+					pushed = CMD_NONE;
+				else
+					pushed = CMD_MOVE_RIGHT;
 				break;
 			case(0xFB):
-				pushed = CMD_ENTER;
+				if (prev_but == button_pressed)
+					pushed = CMD_NONE;
+				else
+					pushed = CMD_ENTER;
 				break;
 			case(0xFD):
-				pushed = CMD_MOVE_LEFT;
+				if (prev_but == button_pressed)
+					pushed = CMD_NONE;
+				else
+					pushed = CMD_MOVE_LEFT;
 				break;
 			case(0xFE):
 				pushed = CMD_QUIT;
 				break;
 			default:
-				pushed = keyboard_cmd;
+				pushed = CMD_NONE;
 				break;
 		}
-    
+
 	return pushed;
  }
 /* 
@@ -366,7 +376,7 @@ display_time_on_tux (int num_seconds)
 	arg = 0xF4F00000;	//Set up the base of the arg for the time.
 	min = num_seconds/60;
 	sec = num_seconds%60;
-	if(min<9)
+	if(min<=9)
 	{	
 		arg = 0xF4F70000;
 	}
