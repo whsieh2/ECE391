@@ -51,6 +51,7 @@
 #include "world.h"
 
 
+
 /*
  * If NDEBUG is not defined, we execute sanity checks to make sure that
  * changes to enumerations, bit maps, etc., have been made consistently.
@@ -66,9 +67,6 @@ static int sanity_check (void);
 #define TICK_USEC      50000 /* tick length in microseconds          */
 #define STATUS_MSG_LEN 40    /* maximum length of status message     */
 #define MOTION_SPEED   2     /* pixels moved per command             */
-
-int previous_time;
-
 /* outcome of the game */
 typedef enum {GAME_WON, GAME_QUIT} game_condition_t;
 
@@ -146,13 +144,10 @@ static void move_photo_up (void);
 static void redraw_room (void);
 static void* status_thread (void* ignore);
 static int time_is_after (struct timeval* t1, struct timeval* t2);
-void create_status_bar(const char* room, const char* status, const char* typed);
-
+//void create_status_bar(const char* room, const char* status, const char* typed);
+static void check_tux_state();
 /* file-scope variables */
-
-static game_info_t game_info; /* game information */
-
-
+		 /* keyboard command input*/
 /* 
  * The variables below are used to keep track of the status message helper
  * thread, with Posix thread id recorded in status_thread_id.  
@@ -172,6 +167,18 @@ static pthread_mutex_t msg_lock = PTHREAD_MUTEX_INITIALIZER;
 static pthread_cond_t  msg_cv = PTHREAD_COND_INITIALIZER;
 static char status_msg[STATUS_MSG_LEN + 1] = {'\0'};
 
+static pthread_t tux_thread_id;
+volatile pthread_mutex_t controller_lock = PTHREAD_MUTEX_INITIALIZER;
+static pthread_cond_t controller_cv = PTHREAD_COND_INITIALIZER;
+static game_info_t game_info; /* game information */
+
+static int32_t enter_room;      /* player has changed rooms        */
+int previous_time;
+volatile int terminate_game=0;
+static cmd_t tux_cmd = CMD_NONE;
+static cmd_t cmdKey = CMD_NONE;	
+
+
 
 /* 
  * cancel_status_thread
@@ -188,6 +195,11 @@ cancel_status_thread (void* ignore)
     (void)pthread_cancel (status_thread_id);
 }
 
+static void
+cancel_tux_thread (void* ignore)
+{
+	(void)pthread_cancel (tux_thread_id);
+}
 
 /* 
  * game_loop
@@ -205,11 +217,10 @@ game_loop ()
      * initialization below for explanations of purpose.
      */
     struct timeval start_time, tick_time;
-
+	
     struct timeval cur_time; /* current time (during tick)      */
     cmd_t cmd;               /* command issued by input control */
-	cmd_t cmdKey;			 /* keyboard command input*/
-    int32_t enter_room;      /* player has changed rooms        */
+
 
     /* Record the starting time--assume success. */
     (void)gettimeofday (&start_time, NULL);
@@ -288,26 +299,28 @@ game_loop ()
 	 * than tick counts for timing, although the real time is rounded
 	 * off to the nearest tick by definition.
 	 */
-	/* (none right now...) */
-
+	
 	/* 
 	 * Handle synchronous events--in this case, only player commands. 
 	 * Note that typed commands that move objects may cause the room
 	 * to be redrawn.
 	 */
-	
-	/*calculates the clock*/
 	if (cur_time.tv_sec - start_time.tv_sec != previous_time)
 	{
 		previous_time = cur_time.tv_sec - start_time.tv_sec;
 		display_time_on_tux (previous_time);
 	
 	}
+	/*calculates the clock*/
+	tux_cmd = CMD_NONE;
+	check_tux_state();
+	if(terminate_game)
+		return GAME_QUIT;
 	
 	
+	cmdKey = CMD_NONE;
 	cmdKey = get_command ();
-	cmd = get_tux_command(cmdKey);
-	switch (cmd) {
+	switch (cmdKey) {
 	    case CMD_UP:    move_photo_down ();  break;
 	    case CMD_RIGHT: move_photo_left ();  break;
 	    case CMD_DOWN:  move_photo_up ();    break;
@@ -698,6 +711,43 @@ status_thread (void* ignore)
 }
 
 
+static void
+tux_thread(void *ignore)
+{	
+	
+	
+	while(1){
+		(void)pthread_mutex_lock(&controller_lock);
+		pthread_cond_wait (&controller_cv, &controller_lock);
+		switch (tux_cmd) {
+			case CMD_UP:    move_photo_down ();  break;
+			case CMD_RIGHT: move_photo_left ();  break;
+			case CMD_DOWN:  move_photo_up ();    break;
+			case CMD_LEFT:  move_photo_right (); break;
+			case CMD_MOVE_LEFT:   
+			enter_room = (TC_CHANGE_ROOM == 
+					  try_to_move_left (&game_info.where));
+			break;
+			case CMD_ENTER:
+			enter_room = (TC_CHANGE_ROOM ==
+					  try_to_enter (&game_info.where));
+			break;
+			case CMD_MOVE_RIGHT:
+			enter_room = (TC_CHANGE_ROOM == 
+					  try_to_move_right (&game_info.where));
+			break;
+			case CMD_TYPED:
+			if (handle_typing ()) {
+				enter_room = 1;
+			}
+			break;
+			case CMD_QUIT: return GAME_QUIT;
+			default: break;
+		}	
+		(void)pthread_mutex_unlock(&controller_lock);
+	}
+	return NULL;
+}
 /* 
  * time_is_after 
  *   DESCRIPTION: Check whether one time is at or after a second time.
@@ -748,7 +798,14 @@ show_status (const char* s)
     (void)pthread_mutex_unlock (&msg_lock);
 }
 
-
+static void 
+check_tux_state()
+{
+	(void)pthread_mutex_lock(&controller_lock);
+	tux_cmd =get_tux_command();
+	(void)pthread_cond_signal(&controller_cv);
+	(void)pthread_mutex_unlock (&controller_lock);
+}
 /* 
  * main
  *   DESCRIPTION: Play the adventure game.
@@ -793,12 +850,16 @@ main ()
 	    }
 	    push_cleanup ((cleanup_fn_t)shutdown_input, NULL); {
 
+		if (0 != pthread_create (&tux_thread_id, NULL, tux_thread, NULL)) {
+        PANIC ("failed to create status thread");
+		}
+		push_cleanup (cancel_tux_thread, NULL); {
 		game = game_loop ();
 
-	    } pop_cleanup (1);
+	 } pop_cleanup (1);
 
 	} pop_cleanup (1);
-
+	} pop_cleanup (1);
     } pop_cleanup (1);
 
     /* Print a message about the outcome. */
@@ -834,12 +895,12 @@ sanity_check ()
     /* Check typed command list. */
     (void)memset (cnt, 0, sizeof (cnt));
     for (idx = 0; NULL != cmd_list[idx].name; idx++) {
-	if (1 > cmd_list[idx].min_len) {
+		if (1 > cmd_list[idx].min_len) {
 	    fprintf (stderr, "Typed command %s always matches.\n",
 		     cmd_list[idx].name);
 	    ret_val = -1;
 	    continue;
-	}
+		}
 	if (cmd_list[idx].min_len > strlen (cmd_list[idx].name)) {
 	    fprintf (stderr, "Typed command %s can never match.\n",
 		     cmd_list[idx].name);
@@ -851,7 +912,7 @@ sanity_check ()
 		     cmd_list[idx].name);
 	    ret_val = -1;
 	    continue;
-	}
+		}
 	cnt[cmd_list[idx].cmd]++;
     }
 
@@ -862,10 +923,11 @@ sanity_check ()
      * entry #2.).
      */
     for (idx = 0; NUM_TC_VALUES > idx; idx++) {
-        if (0 == cnt[idx]) {
+        if (0 == cnt[idx]) 
+		{
 	    fprintf (stderr, "TC_ #%d has no valid command strings.\n", idx);
 	    ret_val = -1;
-	}
+		}
     }
 
     /* Return success/failure. */

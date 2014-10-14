@@ -31,9 +31,12 @@
 int inittux(struct tty_struct* tty);
 int set_led(struct tty_struct* tty, unsigned long arg);
 int set_buttons(struct tty_struct* tty, unsigned long arg);
+int reset_tux(struct tty_struct* tty);
 uint8_t button_packet[2];
 uint8_t button[1];
 unsigned long hexdriver(unsigned long val, unsigned long dec);
+int sig;
+unsigned long LED;
 /************************ Protocol Implementation *************************/
 
 /* tuxctl_handle_packet()
@@ -50,9 +53,11 @@ void tuxctl_handle_packet (struct tty_struct* tty, unsigned char* packet)
 
 	switch(a)
 	{
+		case(MTCP_ACK):
+			sig = 0;
+			return;
 		case(MTCP_RESET):
-			inittux(tty); 
-
+			reset_tux(tty); 
 			return;
 		case(MTCP_ERROR):
 			//inittux(tty); 
@@ -67,14 +72,30 @@ void tuxctl_handle_packet (struct tty_struct* tty, unsigned char* packet)
 			return;
 	}
 }
-
-int inittux(struct tty_struct* tty)
+int reset_tux(struct tty_struct* tty)
 {
 	char init_bic = MTCP_BIOC_ON;
 	char init_led = MTCP_LED_USR;
 	
 	tuxctl_ldisc_put(tty, &init_bic, 1);
 	tuxctl_ldisc_put(tty, &init_led, 1);
+	if (sig == 1)
+		return -EINVAL;
+	else
+	{
+		sig = 1;
+		set_led(tty,LED);	
+		return 0;
+	}
+}
+int inittux(struct tty_struct* tty)
+{
+	char init_bic = MTCP_BIOC_ON;
+	char init_led = MTCP_LED_USR;
+	sig = 1;
+	tuxctl_ldisc_put(tty, &init_bic, 1);
+	tuxctl_ldisc_put(tty, &init_led, 1);
+	LED = 0XF0FF0000;
 	
 	return 0;
 }
@@ -83,8 +104,6 @@ int set_led(struct tty_struct* tty, unsigned long arg)
 	unsigned long init0, init1, init2, init3;
 	unsigned long argVal, led_temp, dec_temp,bufCount;
 	uint8_t buffer[6], argValShifted;
-	//printk("LED arg = %lx\n", arg);
-
 	
 	buffer[0] = MTCP_LED_SET;
 	
@@ -126,9 +145,13 @@ int set_led(struct tty_struct* tty, unsigned long arg)
 		argValShifted = (hexdriver(init3,dec_temp));
 		buffer[5] = argValShifted&0xFF;
 	}
-	tuxctl_ldisc_put(tty, buffer, 2+bufCount);
-
-return 0;
+	if(sig == 1)
+		return 0;
+	else
+		sig =1;
+		tuxctl_ldisc_put(tty, buffer, 2+bufCount);
+		LED= arg;
+	return 0;
 }
 int set_buttons(struct tty_struct* tty, unsigned long arg)
 {
