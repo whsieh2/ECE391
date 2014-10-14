@@ -69,7 +69,7 @@
  * to reduce the number of memory copies required during scrolling.
  * Strictly speaking (try it), no extra space is necessary, but the minimum 
  * means an extra 64kB memory copy with every scroll pixel.  Finally,
- * BUILD_BASE_INIT places initial (or transferred) logical view in the
+ * BUILD_BASE_IstNIT places initial (or transferred) logical view in the
  * middle of the available buffer area.
  */
 #define SCROLL_SIZE     (SCROLL_X_WIDTH * SCROLL_Y_DIM)

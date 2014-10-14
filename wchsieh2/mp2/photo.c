@@ -428,17 +428,24 @@ read_photo (const char* fname)
     uint16_t pixel;	/* one pixel from the file  */
 	
 	int index;
-	uint16_t i, red, green, blue, redPalette, greenPalette,bluePalette;
+	uint16_t i, red, green, blue, redPalette, greenPalette, bluePalette;
 	octree_t levelFour[4096];
 	octree_t levelTwo[64];
 	for (i=0;i<4096;i++)
 	{
-
+		levelFour[i].rgb[0] = 0;
+		levelFour[i].rgb[1] = 0;
+		levelFour[i].rgb[2] = 0;
+		levelFour[i].color = 0;
 		levelFour[i].pixelCount=0;
 	}
 	for (i=0;i<64;i++)
 	{
 		levelTwo[i].pixelCount=0;
+		levelTwo[i].rgb[0] = 0;
+		levelTwo[i].rgb[1] = 0;
+		levelTwo[i].rgb[2] = 0;
+		levelTwo[i].color = 0;	
     }
 	/* 
      * Open the file, allocate the structure, read the header, do some
@@ -501,10 +508,10 @@ read_photo (const char* fname)
 					    (((pixel >> 9) & 0x3) << 2) |
 					    ((pixel >> 3) & 0x3));*/
 	
-		index = ((((pixel>>12)<<8)&0xF00) | (((pixel<<5)>>8)&0x0F0) | (((pixel>>1)&0x00F))); //3 groups of 4 bit RGB values.
-		levelFour[index].rgb[0] += ((pixel>>12)&0x00F);
-		levelFour[index].rgb[1] += ((pixel>>7)&0x00F);
-		levelFour[index].rgb[2] += ((pixel>>1)&0x00F);
+		index = (((pixel>>4)&0xF00) | ((pixel>>3)&0x0F0) | (((pixel>>1)&0x00F))); //3 groups of 4 bit RGB values.
+		levelFour[index].rgb[0] += ((pixel>>10)&0x03E); //all bits of rgb (zero extended on the left).
+		levelFour[index].rgb[1] += ((pixel>>5)&0x003F);
+		levelFour[index].rgb[2] += ((pixel<<1)&0x03E);
 		levelFour[index].color = pixel;
 		levelFour[index].pixelCount++;
 		
@@ -514,7 +521,7 @@ read_photo (const char* fname)
 	
 	makePalette(p,levelFour, levelTwo);
 	
-	fseek(in, sizeof(p->hdr), SEEK_SET);
+	fseek(in, sizeof(p->hdr), SEEK_SET); //moves the file past header to go to image file.
 	/* 
      * Loop over rows from bottom to top.  Note that the file is stored
      * in this order, whereas in memory we store the data in the reverse
@@ -537,11 +544,20 @@ read_photo (const char* fname)
 
 	    }
 		
-	red = (pixel>>11)&0x01F;
+	red = (pixel>>11)&0x01F; 
 	green = (pixel>>5)&0x03F;
 	blue = (pixel)&0x01F;
-	
-	
+	for (i=128; i<192; i++)
+	{
+		redPalette = p->palette[i][0];
+		greenPalette = p->palette[i][1];
+		bluePalette = p->palette[i][2];
+		if((red>>3== redPalette>>4)&&(green>>4 == greenPalette>>4)&&(blue>>3== bluePalette>>4))
+		{
+			p->img[p->hdr.width * y + x] = i + 64;
+			 
+		}
+	}
 	for (i=0; i<128; i++)
 	{
 		redPalette = p->palette[i][0];
@@ -552,17 +568,7 @@ read_photo (const char* fname)
 			p->img[p->hdr.width * y + x] = i +64;
 		}
 	}
-	for (i=128; i<192; i++)
-	{
-		redPalette = p->palette[i][0];
-		greenPalette = p->palette[i][1];
-		bluePalette = p->palette[i][2];
-		if((red>>3 == redPalette>>4)&&(green>>4 == greenPalette>>4)&&(blue>>3 == bluePalette>>4))
-		{
-			p->img[p->hdr.width * y + x] = i + 64;
-			
-		}
-	}
+	
 		
 	}
     }
@@ -576,28 +582,26 @@ void makePalette(photo_t* p, octree_t* levelFour, octree_t* levelTwo)
 	int pixel_count;
 	int index;
 	uint16_t pixelColor;
-	int rest_of_colors = 4096 - 128;
 	
 	qsort(levelFour, 4096, sizeof(octree_t), cmpfunc);
-	
-	for (a = rest_of_colors; a<4096; a++)
+	for (a = 0; a<128; a++)
 	{
 		pixel_count = levelFour[a].pixelCount;
 		if( pixel_count!=0)
 		{
 			for(b= 0; b<3; b++)
 			{
-				p->palette[a-rest_of_colors][b] = (levelFour[a].rgb[b]) / pixel_count;
+				p->palette[a][b] = (levelFour[a].rgb[b]) / pixel_count;//+64
 			}
 		}
 	}
-	for (c = 0; c<rest_of_colors; c++)
+	for (c = 128; c<4096; c++)
 	{
 		pixelColor = levelFour[c].color;
 		index = (((pixelColor>>10)&0x30) | ((pixelColor>>7)&0xC) | ((pixelColor>>3)&0x3)); //3 groups of 2 bit RGB values.
-		levelTwo[index].rgb[0] += (	(pixelColor>>14)&0x003);
-		levelTwo[index].rgb[1] += ((pixelColor>>9)&0x003);
-		levelTwo[index].rgb[2] += ((pixelColor>>3)&0x003);
+		levelTwo[index].rgb[0] += ((pixelColor>>10)&0x03E); //full rgb zero extended bits
+		levelTwo[index].rgb[1] += ((pixelColor>>5)&0x003F);
+		levelTwo[index].rgb[2] += ((pixelColor<<1)&0x03E);
 		levelTwo[index].color = pixelColor;
 		levelTwo[index].pixelCount++;
 	}
@@ -608,7 +612,7 @@ void makePalette(photo_t* p, octree_t* levelFour, octree_t* levelTwo)
 		{
 			for(b= 0; b<3; b++)
 			{
-				p->palette[a+128][b] = (levelTwo[a].rgb[b]) / pixel_count;
+				p->palette[a+128][b] = (levelTwo[a].rgb[b]) / pixel_count;//+192
 			}
 		}
 	}
@@ -618,6 +622,6 @@ void makePalette(photo_t* p, octree_t* levelFour, octree_t* levelTwo)
 int 
 cmpfunc (void const *elem1, void const *elem2)
 {
-//(octree_t*)
 	return ((((octree_t*)elem2)->pixelCount) - (((octree_t*)elem1)->pixelCount));
 }
+	

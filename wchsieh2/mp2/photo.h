@@ -53,9 +53,9 @@
 #define MAX_OBJECT_HEIGHT 100
 
 typedef struct octree_t {
-	unsigned pixelCount;
-	uint16_t color;
-	uint16_t rgb[3];
+	int pixelCount;
+	int color;
+	int rgb[3];
 } octree_t;
 
 /* Fill a buffer with the pixels for a horizontal line of current room. */
