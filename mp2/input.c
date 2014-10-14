@@ -58,15 +58,16 @@
 #include "module/tuxctl-ioctl.h"
 
 /* set to 1 and compile this file by itself to test functionality */
-#define TEST_INPUT_DRIVER 1
+#define TEST_INPUT_DRIVER 0
 
 /* set to 1 to use tux controller; otherwise, uses keyboard input */
 #define USE_TUX_CONTROLLER 1
 
 
-/* stores original terminal settings */
-static struct termios tio_orig;
+
+static struct termios tio_orig;	/* stores original terminal settings */
 static int fd;
+int prev_but;
 
 
 /* 
@@ -86,10 +87,11 @@ int
 init_input ()
 {
     struct termios tio_new;
-
+	fd = open("/dev/ttyS0", O_RDWR | O_NOCTTY);
+	int ldisc_num = N_MOUSE;
+	ioctl(fd, TIOCSETD, &ldisc_num);
+	ioctl(fd, TUX_INIT, 0);
 	
-	//ioctl(fd, TUX_BUTTONS, 0x00000000);
-	//ioctl(fd, TUX_SET_LED, 0x03FDABCD);//0xF1FF09AF);// 0x03FDABCD);
 	
 	/**/
     /*
@@ -178,11 +180,12 @@ typed_a_char (char c)
 cmd_t 
 get_command ()
 {
+	    static cmd_t command = CMD_NONE;
+    cmd_t pushed = CMD_NONE;
 #if (USE_TUX_CONTROLLER == 0) /* use keyboard control with arrow keys */
     static int state = 0;             /* small FSM for arrow keys */
 #endif
-    static cmd_t command = CMD_NONE;
-    cmd_t pushed = CMD_NONE;
+
     int ch;
 
     /* Read all characters from stdin. */
@@ -278,7 +281,6 @@ get_command ()
 	}
 #endif /* USE_TUX_CONTROLLER */
     }
-	
     /*
      * Once a direction is pushed, that command remains active
      * until a turn is taken.
@@ -289,54 +291,42 @@ get_command ()
     return pushed;
 }
 cmd_t
-get_tux_command()
- {
-	printf("this happens");
+get_tux_command(cmd_t keyboard_cmd)
+{
 	int button_pressed;
-	static cmd_t command = CMD_NONE;
-	cmd_t pushed = CMD_NONE;
+	cmd_t pushed = keyboard_cmd;
 	ioctl(fd, TUX_BUTTONS, &button_pressed); //b,a
 	switch(button_pressed)
 		{
-			case(0x80):
-				printf("right");
+			case(0x7F):
 				pushed = CMD_RIGHT;
 				break;
-			case(0x40):
-				printf("down");
+			case(0xBF):
 				pushed = CMD_DOWN;
 				break;
-			case(0x20):
-				printf("left");
+			case(0xDF):
 				pushed = CMD_LEFT;
 				break;
-			case(0x10):
-				printf("up");
+			case(0xEF):
 				pushed = CMD_UP;
 				break;
-			case(0x08):
-				printf("C");
+			case(0xF7):
 				pushed = CMD_MOVE_RIGHT;
 				break;
-			case(0x04):
-				printf("B");
+			case(0xFB):
 				pushed = CMD_ENTER;
 				break;
-			case(0x02):
-				printf("A");
-				pushed = CMD_LEFT;
+			case(0xFD):
+				pushed = CMD_MOVE_LEFT;
 				break;
-			case(0x01):
-				printf("START");
+			case(0xFE):
 				pushed = CMD_QUIT;
 				break;
 			default:
-				printf(".");
+				pushed = keyboard_cmd;
 				break;
 		}
-	if (pushed == CMD_NONE) {
-        command = CMD_NONE;
-    }
+    
 	return pushed;
  }
 /* 
@@ -372,6 +362,7 @@ display_time_on_tux (int num_seconds)
 //#endif
 	unsigned long arg, led3, led2, led1, led0;
 	int min, sec;
+	printf("%d", num_seconds);
 	arg = 0xF4F00000;	//Set up the base of the arg for the time.
 	min = num_seconds/60;
 	sec = num_seconds%60;
@@ -388,7 +379,7 @@ display_time_on_tux (int num_seconds)
 	led1 = sec/10;
 	led0 = sec%10;
 	arg = arg + (led3<<12) + (led2<<8) + (led1<<4) + (led0);
-	printf("I suck");
+	printf("%lx",arg);
 	ioctl(fd, TUX_SET_LED, arg);
 	
 }
@@ -398,10 +389,9 @@ display_time_on_tux (int num_seconds)
 int
 main ()
 {
-	fd = open("/dev/ttyS0", O_RDWR | O_NOCTTY);
-	int ldisc_num = N_MOUSE;
-	ioctl(fd, TIOCSETD, &ldisc_num);
-	ioctl(fd, TUX_INIT, 0);
+	display_time_on_tux (83);
+	printf("time!");
+
     cmd_t last_cmd = CMD_NONE;
     cmd_t cmd;
     static const char* const cmd_name[NUM_COMMANDS] = {

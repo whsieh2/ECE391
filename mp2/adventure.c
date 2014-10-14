@@ -208,6 +208,7 @@ game_loop ()
 
     struct timeval cur_time; /* current time (during tick)      */
     cmd_t cmd;               /* command issued by input control */
+	cmd_t cmdKey;			 /* keyboard command input
     int32_t enter_room;      /* player has changed rooms        */
 
     /* Record the starting time--assume success. */
@@ -219,13 +220,7 @@ game_loop ()
 	tick_time.tv_sec++;
 	tick_time.tv_usec -= 1000000;
     }
-	/*if (cur_time.tv_sec - start_time.tv_sec != previous_time)
-	{
-		previous_time = cur_time.tv_sec - start_time.tv_sec;
-		display_time_on_tux (previous_time);
-	
-	}*/
-	
+
     /* The player has just entered the first room. */
     enter_room = 1;
 
@@ -301,8 +296,17 @@ game_loop ()
 	 * to be redrawn.
 	 */
 	
-	cmd = get_command ();
-	get_tux_command();
+	/*calculates the clock*/
+	if (cur_time.tv_sec - start_time.tv_sec != previous_time)
+	{
+		previous_time = cur_time.tv_sec - start_time.tv_sec;
+		display_time_on_tux (previous_time);
+	
+	}
+	
+	
+	cmdKey = get_command ();
+	cmd = get_tux_command(cmdKey);
 	switch (cmd) {
 	    case CMD_UP:    move_photo_down ();  break;
 	    case CMD_RIGHT: move_photo_left ();  break;
