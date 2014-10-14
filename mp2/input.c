@@ -66,7 +66,8 @@
 
 /* stores original terminal settings */
 static struct termios tio_orig;
-static char fd;
+static int fd;
+
 
 /* 
  * init_input
@@ -80,16 +81,21 @@ static char fd;
  *   SIDE EFFECTS: changes terminal settings on stdin; prints an error
  *                 message on failure
  */
-int
-init_input ()
+void init_tux()
 {
-    struct termios tio_new;
 	fd = open("/dev/ttyS0", O_RDWR | O_NOCTTY);
 	int ldisc_num = N_MOUSE;
 	ioctl(fd, TIOCSETD, &ldisc_num);
 	ioctl(fd, TUX_INIT);
 	ioctl(fd, TUX_BUTTONS, 0x00000000);
-	 ioctl(fd, TUX_SET_LED, 0x03FDABCD);
+	//ioctl(fd, TUX_SET_LED, 0x03FDABCD);//0xF1FF09AF);// 0x03FDABCD);
+} 
+int
+init_input ()
+{
+    struct termios tio_new;
+	//init_tux();
+	/**/
     /*
      * Set non-blocking mode so that stdin can be read without blocking
      * when no new keystrokes are available.
@@ -313,9 +319,30 @@ shutdown_input ()
 void
 display_time_on_tux (int num_seconds)
 {
-#if (USE_TUX_CONTROLLER != 0)
-#error "Tux controller code is not operational yet."
-#endif
+//#if (USE_TUX_CONTROLLER != 0)
+//#error "Tux controller code is not operational yet."
+//#endif
+	unsigned long arg, led3, led2, led1, led0;
+	int min, sec;
+	arg = 0xF4F00000;	//Set up the base of the arg for the time.
+	min = num_seconds/60;
+	sec = num_seconds%60;
+	if(min<9)
+	{	
+		arg = 0xF4F70000;
+	}
+	else
+	{
+		arg = 0xF4FF0000;
+	}
+	led3 = min/10;
+	led2 = min%10;
+	led1 = sec/10;
+	led0 = sec%10;
+	arg = arg + (led3<<12) + (led2<<8) + (led1<<4) + (led0);
+	printf("I suck");
+	ioctl(fd, TUX_SET_LED, arg);
+	
 }
 
 
@@ -323,7 +350,10 @@ display_time_on_tux (int num_seconds)
 int
 main ()
 {
-	
+	init_tux();
+	printf("init in input main");
+	display_time_on_tux (83);
+	printf("time!");
     cmd_t last_cmd = CMD_NONE;
     cmd_t cmd;
     static const char* const cmd_name[NUM_COMMANDS] = {
@@ -336,7 +366,7 @@ main ()
 	perror ("ioperm");
 	return 3;
     }
-
+	
     init_input ();
     while (1) {
         while ((cmd = get_command ()) == last_cmd);
@@ -345,6 +375,7 @@ main ()
 	if (cmd == CMD_QUIT)
 	    break;
 	display_time_on_tux (83);
+	printf("time!");
     }
     shutdown_input ();
     return 0;

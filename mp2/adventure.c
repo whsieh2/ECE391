@@ -67,6 +67,8 @@ static int sanity_check (void);
 #define STATUS_MSG_LEN 40    /* maximum length of status message     */
 #define MOTION_SPEED   2     /* pixels moved per command             */
 
+int previous_time;
+
 /* outcome of the game */
 typedef enum {GAME_WON, GAME_QUIT} game_condition_t;
 
@@ -217,7 +219,13 @@ game_loop ()
 	tick_time.tv_sec++;
 	tick_time.tv_usec -= 1000000;
     }
-
+	/*if (cur_time.tv_sec - start_time.tv_sec != previous_time)
+	{
+		previous_time = cur_time.tv_sec - start_time.tv_sec;
+		display_time_on_tux (previous_time);
+	
+	}*/
+	
     /* The player has just entered the first room. */
     enter_room = 1;
 
